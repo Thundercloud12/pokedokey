@@ -14,7 +14,8 @@ import { sound } from "../../audio/Sound";
 import { Hud } from "../../render/Hud";
 import { SelectScreen, type PlayMode } from "../../ui/SelectScreen";
 import { ResultScreen } from "../../ui/ResultScreen";
-import { network, type WorldSnapshot } from "../../net/TrysteroRoom";
+import { colyseusNet } from "../../net/ColyseusClient";
+import { type WorldSnapshot } from "../../net/TrysteroRoom";
 
 const STEP_MS = 1000 / 60;
 
@@ -63,7 +64,6 @@ function ArenaCanvas({
     canvas.height = engine.H;
     ctx.imageSmoothingEnabled = false;
 
-    const isGuest = mode === "online" && !isHost;
 
     const frame = (t: number) => {
       raf = requestAnimationFrame(frame);
@@ -75,8 +75,8 @@ function ArenaCanvas({
       acc += Math.min(100, t - last);
       last = t;
 
-      if (isGuest) {
-        // Guest mode: render authoritative host snapshot
+      if (mode === "online") {
+        // Authoritative Colyseus Server Mode: render server snapshot
         if (remoteSnapshotRef.current) {
           const snap = remoteSnapshotRef.current;
           engine.renderSnapshot(ctx, snap);
@@ -87,12 +87,12 @@ function ArenaCanvas({
             right: { ...engine.rightState, ...snap.right },
           });
         }
-        // Stream guest inputs to host every frame
-        network.sendControls(cb.current.getP1Controls());
+        // Stream player controls to Colyseus server every frame
+        colyseusNet.sendControls(cb.current.getP1Controls());
         return;
       }
 
-      // Host or Local: simulate physics
+      // Solo or Local 2-Player: simulate physics client-side
       let n = 0;
       while (acc >= STEP_MS && n < 5) {
         engine.setControls(cb.current.getP1Controls(), cb.current.getP2Controls());
@@ -104,12 +104,6 @@ function ArenaCanvas({
 
       engine.render(ctx);
       frameCount++;
-
-      // If online host, broadcast world snapshot to guest
-      if (mode === "online" && isHost) {
-        const world = engine.getWorldSnapshot();
-        network.sendWorld(world);
-      }
 
       // Emit snapshot for HUD every 2 frames (~30Hz update)
       if (frameCount % 2 === 0) {
@@ -178,23 +172,41 @@ export function BattlerGame() {
   const remoteControlsRef = useRef<BattleControls>(emptyBattleControls());
   const remoteSnapshotRef = useRef<WorldSnapshot | null>(null);
 
-  // Setup Trystero Network Listeners
+  // Setup Colyseus Network Listeners
   useEffect(() => {
-    network.onControlsReceived = (ctl) => {
-      remoteControlsRef.current = ctl;
+    colyseusNet.onAssignedSide = (side, rId) => {
+      setIsHost(side === "left");
+      setRoomCode(rId);
     };
 
-    network.onWorldReceived = (snap) => {
+    colyseusNet.onDisconnect = () => {
+      setPeerConnected(false);
+    };
+
+    colyseusNet.onStateUpdate = (snap, rawState) => {
       remoteSnapshotRef.current = snap;
-      if (screen !== "arena") {
+
+      const isLeft = colyseusNet.mySide === "left";
+      const oppId = isLeft ? rawState.right.creatureId : rawState.left.creatureId;
+      const opp = CREATURE_MAP[oppId];
+      if (opp) setP2Creature(opp);
+
+      // Trigger audio on server game events
+      if (snap.flash.text === "FIGHT!" && snap.flash.t === 30) {
+        sound.go();
+      } else if (snap.flash.text.startsWith("ROUND") && snap.flash.t === 40) {
+        sound.tick();
+      }
+
+      if (rawState.phase !== "waiting") {
+        setPeerConnected(true);
+      }
+
+      if (screen !== "arena" && (rawState.phase === "countdown" || rawState.phase === "battle")) {
         sound.unlock();
-        const eng = new PhysicsEngine(
-          320,
-          170,
-          p1CreatureRef.current,
-          p2CreatureRef.current,
-          false
-        );
+        const leftC = CREATURE_MAP[rawState.left.creatureId] || p1CreatureRef.current;
+        const rightC = CREATURE_MAP[rawState.right.creatureId] || p2CreatureRef.current;
+        const eng = new PhysicsEngine(320, 170, leftC, rightC, false);
         setEngine(eng);
         setSnapshot({
           phase: snap.phase,
@@ -204,48 +216,24 @@ export function BattlerGame() {
         });
         setScreen("arena");
         sound.ambience(true);
+      } else if (screen === "arena") {
+        setSnapshot((prev) => {
+          if (!prev) return null;
+          return {
+            phase: snap.phase,
+            round: snap.round,
+            left: { ...prev.left, ...snap.left },
+            right: { ...prev.right, ...snap.right },
+          };
+        });
+        if (snap.phase === "match_over" && (snap.left.roundsWon >= 2 || snap.right.roundsWon >= 2)) {
+          sound.matchWin();
+        }
       }
-    };
-
-    network.onRosterReceived = (roster) => {
-      const opp = CREATURE_MAP[roster.creatureId];
-      if (opp) {
-        setP2Creature(opp);
-      }
-      setPeerConnected(true);
-
-      // If Host, start the online match once guest creature is synced
-      if (isHostRef.current) {
-        sound.unlock();
-        const eng = new PhysicsEngine(
-          320,
-          170,
-          p1CreatureRef.current,
-          opp || p2CreatureRef.current,
-          false
-        );
-        eng.startMatch();
-        setEngine(eng);
-        setSnapshot(eng.getSnapshot());
-        setScreen("arena");
-        sound.ambience(true);
-      }
-    };
-
-    network.onPeerJoin = () => {
-      setPeerConnected(true);
-      network.sendRoster({
-        creatureId: p1CreatureRef.current.id,
-        isHost: isHostRef.current,
-      });
-    };
-
-    network.onPeerLeave = () => {
-      setPeerConnected(false);
     };
 
     return () => {
-      network.leave();
+      colyseusNet.leave();
     };
   }, [screen]);
 
@@ -389,29 +377,57 @@ export function BattlerGame() {
     sound.ambience(true);
   }, [mode, p1Creature, p2Creature]);
 
-  // Online Trystero Handlers
-  const handleHostOnline = () => {
+  const [serverUrl, setServerUrl] = useState(() => colyseusNet.serverUrl);
+
+  const handleUpdateServerUrl = (url: string) => {
+    if (!url) return;
+    colyseusNet.setCustomServerUrl(url);
+    setServerUrl(url);
+  };
+
+  // Online Colyseus Handlers
+  const handleHostOnline = async () => {
     setIsHost(true);
     isHostRef.current = true;
     setMode("online");
-    const code = "ARENA-" + Math.floor(1000 + Math.random() * 9000);
-    setRoomCode(code);
-    setOnlineTab("host");
-    network.join(code, true);
+    try {
+      const code = await colyseusNet.hostRoom(p1Creature.id);
+      setRoomCode(code);
+      setOnlineTab("host");
+    } catch (err: any) {
+      alert("Colyseus Connection Error: " + (err?.message || err));
+    }
   };
 
-  const handleJoinOnline = () => {
+  const handleJoinOnline = async () => {
     if (!joinCodeInput.trim()) return;
     setIsHost(false);
     isHostRef.current = false;
     setMode("online");
-    const code = joinCodeInput.trim().toUpperCase();
-    setRoomCode(code);
-    network.join(code, false);
+    try {
+      const code = joinCodeInput.trim();
+      setRoomCode(code);
+      await colyseusNet.joinRoom(code, p1Creature.id);
+    } catch (err: any) {
+      alert("Failed to join room: " + (err?.message || err));
+    }
+  };
+
+  const handleQuickMatch = async () => {
+    setMode("online");
+    try {
+      const code = await colyseusNet.quickMatch(p1Creature.id);
+      setRoomCode(code);
+      setOnlineTab("host");
+    } catch (err: any) {
+      alert("Colyseus Quick Match Error: " + (err?.message || err));
+    }
   };
 
   const handlePlayAgain = () => {
-    if (engine) {
+    if (mode === "online") {
+      colyseusNet.sendRematch();
+    } else if (engine) {
       engine.startMatch();
       setSnapshot(engine.getSnapshot());
     }
@@ -419,7 +435,7 @@ export function BattlerGame() {
 
   const handleChangeCreature = () => {
     sound.ambience(false);
-    network.leave();
+    colyseusNet.leave();
     setPeerConnected(false);
     setScreen("select");
   };
@@ -431,8 +447,8 @@ export function BattlerGame() {
       : snapshot && snapshot.right.roundsWon >= 2
       ? "right"
       : "left";
-  const winnerCreature = winnerSide === "left" ? p1Creature : p2Creature;
-  const loserCreature = winnerSide === "left" ? p2Creature : p1Creature;
+  const winnerCreature = winnerSide === "left" ? (snapshot?.left.creature || p1Creature) : (snapshot?.right.creature || p2Creature);
+  const loserCreature = winnerSide === "left" ? (snapshot?.right.creature || p2Creature) : (snapshot?.left.creature || p1Creature);
 
   return (
     <div className="relative flex h-screen w-screen flex-col items-center justify-center bg-[#05070e] p-2 font-mono select-none sm:p-4">
@@ -457,6 +473,9 @@ export function BattlerGame() {
               setJoinCodeInput={setJoinCodeInput}
               onHostOnline={handleHostOnline}
               onJoinOnline={handleJoinOnline}
+              onQuickMatch={handleQuickMatch}
+              serverUrl={serverUrl}
+              onUpdateServerUrl={handleUpdateServerUrl}
               peerConnected={peerConnected}
               copied={copied}
               onCopyRoomCode={() => {

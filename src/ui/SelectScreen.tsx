@@ -28,6 +28,9 @@ interface SelectScreenProps {
   setJoinCodeInput: (code: string) => void;
   onHostOnline: () => void;
   onJoinOnline: () => void;
+  onQuickMatch?: () => void;
+  serverUrl?: string;
+  onUpdateServerUrl?: (url: string) => void;
   peerConnected: boolean;
   copied: boolean;
   onCopyRoomCode: () => void;
@@ -103,6 +106,9 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
   setJoinCodeInput,
   onHostOnline,
   onJoinOnline,
+  onQuickMatch,
+  serverUrl,
+  onUpdateServerUrl,
   peerConnected,
   copied,
   onCopyRoomCode,
@@ -429,21 +435,45 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
             {mode === "online" && !peerConnected ? (
               <div className="flex flex-col gap-2">
                 {onlineTab === "menu" ? (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-2">
                     <button
                       type="button"
-                      onClick={onHostOnline}
-                      className="border border-white bg-white py-2 text-center text-xs font-bold text-black uppercase hover:bg-white/90"
+                      onClick={onQuickMatch || onHostOnline}
+                      className="border border-emerald-400 bg-emerald-500 py-2 text-center text-xs font-bold text-black uppercase hover:bg-emerald-400 transition shadow-lg"
                     >
-                      Host Room
+                      ⚡ QUICK MATCH (MATCHMAKING)
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setOnlineTab("join")}
-                      className="border border-white/60 bg-black/60 py-2 text-center text-xs font-bold text-white uppercase hover:bg-white/10"
-                    >
-                      Join Room
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={onHostOnline}
+                        className="border border-white bg-white/90 py-1.5 text-center text-xs font-bold text-black uppercase hover:bg-white transition"
+                      >
+                        Create Room
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOnlineTab("join")}
+                        className="border border-white/60 bg-black/60 py-1.5 text-center text-xs font-bold text-white uppercase hover:bg-white/10 transition"
+                      >
+                        Join Room
+                      </button>
+                    </div>
+                    {serverUrl && (
+                      <div className="flex items-center justify-between text-[9px] text-white/40 pt-1">
+                        <span className="truncate max-w-[200px]">Server: <strong className="text-white/70">{serverUrl}</strong></span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const u = prompt("Enter Colyseus WebSocket Server URL (e.g. ws://YOUR_EC2_IP:2567 or wss://domain.com):", serverUrl || "");
+                            if (u !== null && onUpdateServerUrl) onUpdateServerUrl(u.trim());
+                          }}
+                          className="underline hover:text-white"
+                        >
+                          [Edit Server]
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : onlineTab === "host" ? (
                   <div className="flex flex-col items-center gap-1.5">
