@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Peer, { type DataConnection } from "peerjs";
-import { Volume2, VolumeX, ArrowLeft } from "lucide-react";
+import { Volume2, VolumeX, ArrowLeft, Smartphone } from "lucide-react";
 import { CREATURES, type Creature } from "../../data/creatures";
+import { MOVES } from "../../data/moves";
+import { TYPE_META } from "../../data/typeChart";
 import {
   PhysicsEngine,
   emptyBattleControls,
@@ -113,8 +115,10 @@ function ArenaCanvas({
 }
 
 export function BattlerGame() {
-  const [touch] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches
+  const [touchEnabled, setTouchEnabled] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      (window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768)
   );
   const [screen, setScreen] = useState<"select" | "arena">("select");
   const [mode, setMode] = useState<PlayMode>("solo");
@@ -407,7 +411,22 @@ export function BattlerGame() {
               </button>
             </div>
 
-            <div className="absolute top-1 right-2 z-30">
+            <div className="absolute top-1 right-2 z-30 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setTouchEnabled((prev) => !prev)}
+                className={`flex items-center gap-1 border px-2 py-1 text-[10px] font-bold transition ${
+                  touchEnabled
+                    ? "border-emerald-400 bg-emerald-950/70 text-emerald-300"
+                    : "border-white/20 bg-black/60 text-white/60 hover:text-white"
+                }`}
+                title="Toggle Mobile Touch Controls"
+              >
+                <Smartphone size={11} />
+                <span className="hidden sm:inline">TOUCH:</span>
+                <span>{touchEnabled ? "ON" : "OFF"}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={toggleMute}
@@ -435,70 +454,126 @@ export function BattlerGame() {
                 rightState={snapshot.right}
                 currentRound={snapshot.round}
                 isTwoPlayer={isTwoPlayer}
+                hideAbilityBar={touchEnabled}
               />
             )}
 
-            {/* Mobile Touch Controls */}
-            {touch && (
-              <div className="absolute inset-x-0 bottom-16 z-20 flex justify-between px-3 pointer-events-auto">
-                <div className="flex gap-2">
+            {/* Enhanced Mobile Touch Controls */}
+            {touchEnabled && snapshot && (
+              <div className="absolute inset-x-0 bottom-2 z-20 flex items-end justify-between px-2 sm:px-4 pointer-events-auto touch-none select-none">
+                {/* Movement D-Pad */}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onPointerDown={() => { tcP1.current.left = true; }}
-                    onPointerUp={() => { tcP1.current.left = false; }}
+                    onPointerDown={(e) => { e.preventDefault(); tcP1.current.left = true; }}
+                    onPointerUp={(e) => { e.preventDefault(); tcP1.current.left = false; }}
+                    onPointerCancel={() => { tcP1.current.left = false; }}
                     onPointerLeave={() => { tcP1.current.left = false; }}
-                    className="grid size-11 place-items-center rounded border border-white/40 bg-black/70 text-lg font-bold active:bg-white active:text-black"
+                    className="grid size-12 place-items-center rounded-lg border border-white/30 bg-black/80 text-xl font-bold text-white shadow-lg active:scale-95 active:bg-white active:text-black touch-none"
+                    aria-label="Run Left"
                   >
                     ◀
                   </button>
                   <button
                     type="button"
-                    onPointerDown={() => { tcP1.current.right = true; }}
-                    onPointerUp={() => { tcP1.current.right = false; }}
+                    onPointerDown={(e) => { e.preventDefault(); tcP1.current.right = true; }}
+                    onPointerUp={(e) => { e.preventDefault(); tcP1.current.right = false; }}
+                    onPointerCancel={() => { tcP1.current.right = false; }}
                     onPointerLeave={() => { tcP1.current.right = false; }}
-                    className="grid size-11 place-items-center rounded border border-white/40 bg-black/70 text-lg font-bold active:bg-white active:text-black"
+                    className="grid size-12 place-items-center rounded-lg border border-white/30 bg-black/80 text-xl font-bold text-white shadow-lg active:scale-95 active:bg-white active:text-black touch-none"
+                    aria-label="Run Right"
                   >
                     ▶
                   </button>
                   <button
                     type="button"
-                    onPointerDown={() => { tcP1.current.jump = true; }}
-                    onPointerUp={() => { tcP1.current.jump = false; }}
+                    onPointerDown={(e) => { e.preventDefault(); tcP1.current.jump = true; }}
+                    onPointerUp={(e) => { e.preventDefault(); tcP1.current.jump = false; }}
+                    onPointerCancel={() => { tcP1.current.jump = false; }}
                     onPointerLeave={() => { tcP1.current.jump = false; }}
-                    className="grid size-11 place-items-center rounded border border-white/40 bg-black/70 text-lg font-bold active:bg-white active:text-black"
+                    className="grid size-12 place-items-center rounded-lg border border-emerald-400/60 bg-black/80 text-xl font-bold text-emerald-400 shadow-lg active:scale-95 active:bg-emerald-400 active:text-black touch-none"
+                    aria-label="Jump"
                   >
                     ▲
                   </button>
                 </div>
 
-                <div className="flex gap-1.5">
-                  {[0, 1, 2, 3].map((slot) => (
-                    <button
-                      key={slot}
-                      type="button"
-                      onPointerDown={() => {
-                        if (slot === 0) tcP1.current.move1 = true;
-                        if (slot === 1) tcP1.current.move2 = true;
-                        if (slot === 2) tcP1.current.move3 = true;
-                        if (slot === 3) tcP1.current.move4 = true;
-                      }}
-                      onPointerUp={() => {
-                        if (slot === 0) tcP1.current.move1 = false;
-                        if (slot === 1) tcP1.current.move2 = false;
-                        if (slot === 2) tcP1.current.move3 = false;
-                        if (slot === 3) tcP1.current.move4 = false;
-                      }}
-                      onPointerLeave={() => {
-                        if (slot === 0) tcP1.current.move1 = false;
-                        if (slot === 1) tcP1.current.move2 = false;
-                        if (slot === 2) tcP1.current.move3 = false;
-                        if (slot === 3) tcP1.current.move4 = false;
-                      }}
-                      className="grid size-11 place-items-center rounded border border-amber-400/60 bg-black/70 text-xs font-bold text-amber-300 active:bg-amber-400 active:text-black"
-                    >
-                      M{slot + 1}
-                    </button>
-                  ))}
+                {/* 4 Ability Slots with Live Cooldowns */}
+                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:gap-2">
+                  {snapshot.left.creature.moves.map((mId, slot) => {
+                    const move = MOVES[mId];
+                    if (!move) return null;
+                    const meta = TYPE_META[move.type];
+                    const cd = snapshot.left.cooldowns[slot];
+                    const cdPct = cd > 0 ? Math.min(100, (cd / move.cooldownMs) * 100) : 0;
+
+                    return (
+                      <button
+                        key={mId}
+                        type="button"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          if (slot === 0) tcP1.current.move1 = true;
+                          if (slot === 1) tcP1.current.move2 = true;
+                          if (slot === 2) tcP1.current.move3 = true;
+                          if (slot === 3) tcP1.current.move4 = true;
+                        }}
+                        onPointerUp={(e) => {
+                          e.preventDefault();
+                          if (slot === 0) tcP1.current.move1 = false;
+                          if (slot === 1) tcP1.current.move2 = false;
+                          if (slot === 2) tcP1.current.move3 = false;
+                          if (slot === 3) tcP1.current.move4 = false;
+                        }}
+                        onPointerCancel={() => {
+                          if (slot === 0) tcP1.current.move1 = false;
+                          if (slot === 1) tcP1.current.move2 = false;
+                          if (slot === 2) tcP1.current.move3 = false;
+                          if (slot === 3) tcP1.current.move4 = false;
+                        }}
+                        onPointerLeave={() => {
+                          if (slot === 0) tcP1.current.move1 = false;
+                          if (slot === 1) tcP1.current.move2 = false;
+                          if (slot === 2) tcP1.current.move3 = false;
+                          if (slot === 3) tcP1.current.move4 = false;
+                        }}
+                        className="relative flex flex-col items-center justify-between overflow-hidden rounded border bg-black/85 p-1 w-16 sm:w-18 h-12 shadow-lg active:scale-95 touch-none"
+                        style={{
+                          borderColor: cd > 0 ? "rgba(255,255,255,0.2)" : meta.color,
+                        }}
+                      >
+                        {/* Cooldown sweep overlay */}
+                        {cd > 0 && (
+                          <div
+                            className="absolute inset-x-0 bottom-0 bg-black/80 backdrop-blur-[1px] transition-all pointer-events-none"
+                            style={{ height: `${cdPct}%` }}
+                          />
+                        )}
+
+                        <span className="relative z-10 text-[8px] font-bold text-white/50 uppercase leading-none">
+                          M{slot + 1}
+                        </span>
+                        <span className="relative z-10 text-[9px] font-bold text-white truncate w-full text-center leading-tight">
+                          {move.name}
+                        </span>
+
+                        <div className="relative z-10 flex items-center justify-center w-full">
+                          {cd > 0 ? (
+                            <span className="text-[9px] font-mono font-bold text-amber-300">
+                              {(cd / 1000).toFixed(1)}s
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[7px] font-bold uppercase px-1 rounded"
+                              style={{ backgroundColor: meta.darkColor, color: "#fff" }}
+                            >
+                              {meta.name}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

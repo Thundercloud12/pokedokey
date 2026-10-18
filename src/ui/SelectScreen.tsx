@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bot, Users, Globe, Volume2, VolumeX, Swords, Shield, Zap, Wind } from "lucide-react";
+import { Bot, Users, Globe, Volume2, VolumeX, Swords, Shield, Zap, Wind, HelpCircle } from "lucide-react";
 import { CREATURES, type Creature } from "../data/creatures";
 import { MOVES } from "../data/moves";
 import { TYPE_META } from "../data/typeChart";
 import { drawCreature } from "../render/CreatureSprite";
 import { sound } from "../audio/Sound";
+import { TutorialModal } from "./TutorialModal";
 
 export type PlayMode = "solo" | "local2p" | "online";
 
@@ -108,6 +109,10 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
 }) => {
   const [activePicker, setActivePicker] = useState<"p1" | "p2">("p1");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [showTutorial, setShowTutorial] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !localStorage.getItem("creature_battler_tutorial_seen");
+  });
 
   const activeHoveredCreature =
     CREATURES.find((c) => c.id === hoveredId) ||
@@ -186,6 +191,17 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
           >
             <Globe size={13} />
             <span>ONLINE P2P</span>
+          </button>
+
+          {/* How to Play / Tutorial */}
+          <button
+            type="button"
+            onClick={() => setShowTutorial(true)}
+            className="flex items-center gap-1.5 border border-amber-400/60 bg-amber-400/10 px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-400 hover:text-black transition"
+            title="Learn How to Play"
+          >
+            <HelpCircle size={13} />
+            <span className="hidden sm:inline">HOW TO PLAY</span>
           </button>
 
           {/* Sound Toggle */}
@@ -494,6 +510,12 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
         </div>
         <span>2D CREATURE ARENA • ORIGINAL 6-ELEMENT WHEEL</span>
       </div>
+
+      {/* Tutorial / How to Play Modal */}
+      <TutorialModal
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
     </div>
   );
 };

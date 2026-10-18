@@ -8,6 +8,7 @@ interface HudProps {
   rightState: CreatureState;
   currentRound: number;
   isTwoPlayer: boolean;
+  hideAbilityBar?: boolean;
 }
 
 const P1_KEYS = ["SPACE", "F", "Q", "E"];
@@ -18,6 +19,7 @@ export const Hud: React.FC<HudProps> = ({
   rightState,
   currentRound,
   isTwoPlayer,
+  hideAbilityBar = false,
 }) => {
   const p1HpPercent = Math.max(0, Math.min(100, (leftState.hp / leftState.maxHp) * 100));
   const p2HpPercent = Math.max(0, Math.min(100, (rightState.hp / rightState.maxHp) * 100));
@@ -221,15 +223,17 @@ export const Hud: React.FC<HudProps> = ({
       </div>
 
       {/* Bottom Ability Cooldown Indicators */}
-      <div className="flex items-end justify-between w-full pb-1">
-        {/* P1 Abilities */}
-        <div>{renderMoveSlots(leftState, P1_KEYS, "left")}</div>
+      {!hideAbilityBar && (
+        <div className="flex items-end justify-between w-full pb-1">
+          {/* P1 Abilities */}
+          <div>{renderMoveSlots(leftState, P1_KEYS, "left")}</div>
 
-        {/* P2 Abilities (only shown in local 2-Player mode) */}
-        {isTwoPlayer && (
-          <div>{renderMoveSlots(rightState, P2_KEYS, "right")}</div>
-        )}
-      </div>
+          {/* P2 Abilities (only shown in local 2-Player mode) */}
+          {isTwoPlayer && (
+            <div>{renderMoveSlots(rightState, P2_KEYS, "right")}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
