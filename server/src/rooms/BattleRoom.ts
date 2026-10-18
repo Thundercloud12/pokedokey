@@ -5,7 +5,6 @@ import { CREATURE_MAP, CREATURES } from "../data/creatures.js";
 
 interface JoinOptions {
   creatureId?: string;
-  roomCode?: string;
 }
 
 export class BattleRoom extends Room<BattleState> {
@@ -16,7 +15,6 @@ export class BattleRoom extends Room<BattleState> {
   private p2Client?: Client;
   private p1CreatureId = "pyrokid";
   private p2CreatureId = "aquanaut";
-  private roomCode = "";
 
   private waitingTimer?: Delayed;
   private matchOverTimer?: Delayed;
@@ -24,11 +22,6 @@ export class BattleRoom extends Room<BattleState> {
   onCreate(options: JoinOptions) {
     this.autoDispose = true;
     this.setState(new BattleState());
-
-    this.roomCode = (options.roomCode || "").trim().toUpperCase();
-    if (this.roomCode) {
-      this.setMetadata({ roomCode: this.roomCode });
-    }
 
     const c1 = CREATURE_MAP[options.creatureId || "pyrokid"] || CREATURES[0];
     const c2 = CREATURES[1];
@@ -39,7 +32,7 @@ export class BattleRoom extends Room<BattleState> {
     // Auto-dispose idle room if challenger doesn't join within 3 minutes
     this.waitingTimer = this.clock.setTimeout(() => {
       if (this.clients.length < 2) {
-        console.log(`[BattleRoom] Room ${this.roomId} (${this.roomCode || "public"}) expired after 3m of waiting. Disposing.`);
+        console.log(`[BattleRoom] Room ${this.roomId} expired after 3m of waiting. Disposing.`);
         this.disconnect();
       }
     }, 3 * 60 * 1000);
@@ -73,12 +66,10 @@ export class BattleRoom extends Room<BattleState> {
       ? options.creatureId
       : "pyrokid";
 
-    const displayCode = this.roomCode || this.roomId;
-
     if (!this.p1Client) {
       this.p1Client = client;
       this.p1CreatureId = chosenCreature;
-      client.send("assigned_side", { side: "left", roomId: this.roomId, roomCode: displayCode });
+      client.send("assigned_side", { side: "left", roomId: this.roomId });
       this.state.phase = "waiting";
       this.state.flash.text = "WAITING FOR OPPONENT...";
       this.state.flash.color = "#38bdf8";
@@ -87,13 +78,13 @@ export class BattleRoom extends Room<BattleState> {
       this.p2Client = client;
       this.p2CreatureId = chosenCreature;
 
-      // Cancel waiting timer once both players join
+      // Cancel waiting timer once both players connect
       if (this.waitingTimer) {
         this.waitingTimer.clear();
         this.waitingTimer = undefined;
       }
 
-      client.send("assigned_side", { side: "right", roomId: this.roomId, roomCode: displayCode });
+      client.send("assigned_side", { side: "right", roomId: this.roomId });
 
       // Both players connected! Set chosen creatures and launch match
       const c1 = CREATURE_MAP[this.p1CreatureId] || CREATURES[0];
@@ -157,7 +148,7 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   onDispose() {
-    console.log(`[BattleRoom] Room ${this.roomId} (${this.roomCode || "public"}) disposed.`);
+    console.log(`[BattleRoom] Room ${this.roomId} disposed.`);
     if (this.waitingTimer) this.waitingTimer.clear();
     if (this.matchOverTimer) this.matchOverTimer.clear();
   }

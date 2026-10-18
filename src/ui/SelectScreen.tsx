@@ -507,7 +507,7 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
-                        placeholder="ENTER ROOM CODE (e.g. ARENA-1234)..."
+                        placeholder="PASTE ROOM ID..."
                         value={joinCodeInput}
                         onChange={(e) => setJoinCodeInput(e.target.value)}
                         className="w-full border border-white/40 bg-black/60 px-2 py-1 text-xs text-white font-mono"

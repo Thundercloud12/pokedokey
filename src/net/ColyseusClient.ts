@@ -102,30 +102,19 @@ export class ColyseusClientManager {
     this.client = new Client(url);
   }
 
-  async hostRoom(creatureId: string, customCode?: string): Promise<string> {
+  async hostRoom(creatureId: string): Promise<string> {
     this.leave();
-    const roomCode = customCode || "ARENA-" + Math.floor(1000 + Math.random() * 9000);
-    this.room = await this.client.create("battle_room", { creatureId, roomCode });
-    this.roomId = roomCode;
+    this.room = await this.client.create("battle_room", { creatureId });
+    this.roomId = this.room.id;
     this.mySide = "left";
     this.setupRoomListeners(this.room);
-    return roomCode;
+    return this.room.id;
   }
 
-  async joinRoom(code: string, creatureId: string): Promise<void> {
+  async joinRoom(roomId: string, creatureId: string): Promise<void> {
     this.leave();
-    const cleanCode = code.trim();
-    try {
-      // 1. Try matching by uppercase room code (e.g. ARENA-1234)
-      this.room = await this.client.joinOrCreate("battle_room", {
-        creatureId,
-        roomCode: cleanCode.toUpperCase(),
-      });
-    } catch {
-      // 2. Fallback: try direct joinById in case raw Colyseus roomId was passed
-      this.room = await this.client.joinById(cleanCode, { creatureId });
-    }
-    this.roomId = cleanCode.toUpperCase();
+    this.room = await this.client.joinById(roomId.trim(), { creatureId });
+    this.roomId = this.room.id;
     this.mySide = "right";
     this.setupRoomListeners(this.room);
   }
@@ -163,10 +152,10 @@ export class ColyseusClientManager {
   }
 
   private setupRoomListeners(room: Room) {
-    room.onMessage("assigned_side", (data: { side: "left" | "right"; roomId: string; roomCode?: string }) => {
+    room.onMessage("assigned_side", (data: { side: "left" | "right"; roomId: string }) => {
       this.mySide = data.side;
-      this.roomId = data.roomCode || data.roomId;
-      this.onAssignedSide?.(data.side, data.roomCode || data.roomId);
+      this.roomId = data.roomId;
+      this.onAssignedSide?.(data.side, data.roomId);
     });
 
     room.onStateChange((state: ColyseusBattleState) => {
