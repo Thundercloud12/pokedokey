@@ -1,5 +1,5 @@
-import { FootballGameScreen } from "./components/football/FootballGame";
+import { BattlerGame } from "./components/battler/BattlerGame";
 
 export default function App() {
-  return <FootballGameScreen />;
+  return <BattlerGame />;
 }
