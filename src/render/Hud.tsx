@@ -219,6 +219,36 @@ export const Hud: React.FC<HudProps> = ({
               </span>
             )}
           </div>
+
+          {/* AI Opponent Moves Cooldown Indicators (in Solo Mode) */}
+          {!isTwoPlayer && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[8px] text-white/50 uppercase font-mono">AI CD:</span>
+              <div className="flex items-center gap-1">
+                {rightState.creature.moves.map((mId, slot) => {
+                  const m = MOVES[mId];
+                  if (!m) return null;
+                  const cd = rightState.cooldowns[slot];
+                  const cdPct = cd > 0 ? (cd / m.cooldownMs) * 100 : 0;
+                  const isReady = cd <= 0;
+                  return (
+                    <div
+                      key={mId}
+                      className="relative h-2 w-8 sm:w-11 overflow-hidden border border-white/20 bg-black/60 rounded-xs"
+                      title={`${m.name}: ${isReady ? "READY" : (cd / 1000).toFixed(1) + "s"}`}
+                    >
+                      <div
+                        className={`h-full transition-all duration-75 ${
+                          isReady ? "bg-emerald-400" : "bg-amber-400"
+                        }`}
+                        style={{ width: `${isReady ? 100 : 100 - cdPct}%` }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

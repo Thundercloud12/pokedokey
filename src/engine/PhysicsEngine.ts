@@ -98,6 +98,7 @@ export class PhysicsEngine {
   shake = 0;
   frame = 0;
   isAiBot = true;
+  private botAttackTimer = 0;
 
   onPhaseChange?: (phase: BattlePhase) => void;
 
@@ -195,6 +196,7 @@ export class PhysicsEngine {
     this.rightState.slowT = 0;
     this.rightState.burnT = 0;
     this.rightState.cooldowns = [0, 0, 0, 0];
+    this.botAttackTimer = 30;
   }
 
   setCreatures(creatureLeft: Creature, creatureRight: Creature) {
@@ -390,13 +392,14 @@ export class PhysicsEngine {
 
   private castMove(st: CreatureState, slot: number) {
     if (st.cooldowns[slot] > 0) return;
+    if (st.castT > 0 || st.hurtT > 0) return;
 
     const moveId = st.creature.moves[slot];
     const move = MOVES[moveId];
     if (!move) return;
 
     st.cooldowns[slot] = move.cooldownMs;
-    st.castT = 12;
+    st.castT = Math.max(14, move.windupFrames + move.durationFrames);
 
     // Lunge forward slightly on melee attacks
     if (move.shape === "melee") {
@@ -485,14 +488,49 @@ export class PhysicsEngine {
     const dx = opp.x - me.x;
     const dist = Math.abs(dx);
 
-    // Aim face towards opponent
-    me.facing = dx > 0 ? 1 : -1;
+    // Reset bot attack triggers by default every frame
+    this.p2Controls.move1 = false;
+    this.p2Controls.move2 = false;
+    this.p2Controls.move3 = false;
+    this.p2Controls.move4 = false;
 
-    // Movement: stay in mid-range (~60px)
-    if (dist > 80) {
+    // Tick down bot attack pacing timer
+    if (this.botAttackTimer > 0) {
+      this.botAttackTimer--;
+    }
+
+    // Aim face towards opponent
+    if (Math.abs(dx) > 6) {
+      me.facing = dx > 0 ? 1 : -1;
+    }
+
+    // If bot is currently executing an attack or in hitstun/stun, don't initiate actions
+    if (me.castT > 0 || me.hurtT > 0 || me.stunT > 0) {
+      this.p2Controls.left = false;
+      this.p2Controls.right = false;
+      this.p2Controls.jump = false;
+      return;
+    }
+
+    // Movement Pacing & Spacing:
+    // If bot attacked recently, enter recovery / repositioning phase
+    if (this.botAttackTimer > 15) {
+      // Back off slightly to give the human player breathing room and a clear opening
+      if (dist < 60) {
+        this.p2Controls.left = dx > 0;
+        this.p2Controls.right = dx < 0;
+      } else {
+        this.p2Controls.left = false;
+        this.p2Controls.right = false;
+      }
+      return;
+    }
+
+    // Normal approach spacing
+    if (dist > 75) {
       this.p2Controls.left = dx < 0;
       this.p2Controls.right = dx > 0;
-    } else if (dist < 35) {
+    } else if (dist < 32) {
       this.p2Controls.left = dx > 0;
       this.p2Controls.right = dx < 0;
     } else {
@@ -501,13 +539,39 @@ export class PhysicsEngine {
     }
 
     // Jump if opponent is on a platform above
-    this.p2Controls.jump = opp.y < me.y - 15 && Math.random() < 0.05 && me.onGround;
+    this.p2Controls.jump = opp.y < me.y - 15 && Math.random() < 0.04 && me.onGround;
 
-    // Attack selection
-    this.p2Controls.move1 = dist < 32 && me.cooldowns[0] <= 0 && Math.random() < 0.25;
-    this.p2Controls.move2 = dist > 40 && me.cooldowns[1] <= 0 && Math.random() < 0.2;
-    this.p2Controls.move3 = dist < 45 && me.cooldowns[2] <= 0 && Math.random() < 0.15;
-    this.p2Controls.move4 = dist < 50 && me.cooldowns[3] <= 0 && Math.random() < 0.1;
+    // Only attack when botAttackTimer has fully elapsed (human-like pacing)
+    if (this.botAttackTimer <= 0) {
+      let chosenMove: number | null = null;
+
+      // 1. Close-range Melee (Move 1)
+      if (dist < 34 && me.cooldowns[0] <= 0 && Math.random() < 0.5) {
+        chosenMove = 0;
+      }
+      // 2. Mid/Long range Projectile (Move 2)
+      else if (dist >= 45 && dist <= 140 && me.cooldowns[1] <= 0 && Math.random() < 0.45) {
+        chosenMove = 1;
+      }
+      // 3. AoE Zone Attack (Move 3)
+      else if (dist < 50 && me.cooldowns[2] <= 0 && Math.random() < 0.35) {
+        chosenMove = 2;
+      }
+      // 4. Special / Rush Attack (Move 4)
+      else if (dist < 60 && me.cooldowns[3] <= 0 && Math.random() < 0.3) {
+        chosenMove = 3;
+      }
+
+      if (chosenMove !== null) {
+        if (chosenMove === 0) this.p2Controls.move1 = true;
+        if (chosenMove === 1) this.p2Controls.move2 = true;
+        if (chosenMove === 2) this.p2Controls.move3 = true;
+        if (chosenMove === 3) this.p2Controls.move4 = true;
+
+        // Human-like attack pacing cooldown: 45-70 frames (~0.75 - 1.15 seconds)
+        this.botAttackTimer = 45 + Math.floor(Math.random() * 25);
+      }
+    }
   }
 
   render(ctx: CanvasRenderingContext2D) {
