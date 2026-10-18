@@ -19,6 +19,9 @@ export default function App() {
     chargeRatio: 0,
     ballAngleToPlayer: 0,
     ballDistance: 0,
+    ballInRange: false,
+    isDribbling: false,
+    cameraMode: "thirdPerson",
     mode: "bot",
     roomCode: "",
     isHost: false,
@@ -79,6 +82,10 @@ export default function App() {
     engineRef.current?.setPixelScale(scale);
   };
 
+  const handleToggleCamera = () => {
+    engineRef.current?.toggleCameraMode();
+  };
+
   const handleRematch = () => {
     engineRef.current?.soundUnlock();
     engineRef.current?.setGameMode(ui.mode, ui.roomCode);
@@ -97,6 +104,7 @@ export default function App() {
       <HUD
         ui={ui}
         onTogglePixelScale={handleTogglePixelScale}
+        onToggleCamera={handleToggleCamera}
         onOpenMenu={() => setMenuOpen(true)}
         onRequestLock={() => engineRef.current?.requestLock()}
       />

@@ -1,11 +1,12 @@
 import React from "react";
-import { Volume2, VolumeX, Compass, Sliders } from "lucide-react";
+import { Volume2, VolumeX, Compass, Sliders, Eye } from "lucide-react";
 import { sound } from "../audio/Sound";
 import type { GameUiState } from "../game/engine";
 
 interface HudProps {
   ui: GameUiState;
   onTogglePixelScale: () => void;
+  onToggleCamera: () => void;
   onOpenMenu: () => void;
   onRequestLock: () => void;
 }
@@ -13,6 +14,7 @@ interface HudProps {
 export const HUD: React.FC<HudProps> = ({
   ui,
   onTogglePixelScale,
+  onToggleCamera,
   onOpenMenu,
   onRequestLock,
 }) => {
@@ -72,8 +74,22 @@ export const HUD: React.FC<HudProps> = ({
           </span>
         </div>
 
-        {/* Buttons (Mute, Pixel Filter, Menu) */}
+        {/* Buttons (Camera Toggle, Pixel Filter, Mute, Menu) */}
         <div className="pointer-events-auto flex items-center gap-2">
+          {/* Camera View Mode Toggle */}
+          <button
+            type="button"
+            onClick={onToggleCamera}
+            className="flex items-center gap-1.5 border border-white/30 bg-black/60 px-2.5 py-1.5 text-[11px] uppercase tracking-wider text-yellow-400 transition hover:bg-white hover:text-black"
+            title="Toggle Camera View (Press V)"
+          >
+            <Eye size={13} />
+            <span className="hidden sm:inline">
+              CAM: {ui.cameraMode === "thirdPerson" ? "3RD PERSON [V]" : "1ST PERSON [V]"}
+            </span>
+          </button>
+
+          {/* Pixel Scale Slider */}
           <button
             type="button"
             onClick={onTogglePixelScale}
@@ -83,6 +99,8 @@ export const HUD: React.FC<HudProps> = ({
             <Sliders size={13} />
             <span className="hidden sm:inline">PIXEL: {Math.round(ui.pixelScale * 100)}%</span>
           </button>
+
+          {/* Mute Button */}
           <button
             type="button"
             onClick={toggleMute}
@@ -91,6 +109,8 @@ export const HUD: React.FC<HudProps> = ({
           >
             {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </button>
+
+          {/* Menu Button */}
           <button
             type="button"
             onClick={(e) => {
@@ -104,20 +124,60 @@ export const HUD: React.FC<HudProps> = ({
         </div>
       </div>
 
-      {/* CENTER CROSSHAIR */}
+      {/* CENTER CROSSHAIR & BALL-IN-RANGE RETICLE */}
       <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
-        <div className="relative size-8">
+        <div className="relative size-10">
           {/* Crosshair lines */}
-          <div className="absolute left-1/2 top-0 h-2 w-0.5 -translate-x-1/2 bg-white/70" />
-          <div className="absolute bottom-0 left-1/2 h-2 w-0.5 -translate-x-1/2 bg-white/70" />
-          <div className="absolute left-0 top-1/2 h-0.5 w-2 -translate-y-1/2 bg-white/70" />
-          <div className="absolute right-0 top-1/2 h-0.5 w-2 -translate-y-1/2 bg-white/70" />
-          <div className="absolute left-1/2 top-1/2 size-1 -translate-x-1/2 -translate-y-1/2 bg-white" />
+          <div
+            className={`absolute left-1/2 top-0 h-2.5 w-0.5 -translate-x-1/2 transition-colors ${
+              ui.isDribbling
+                ? "bg-emerald-400"
+                : ui.ballInRange
+                ? "bg-yellow-400"
+                : "bg-white/70"
+            }`}
+          />
+          <div
+            className={`absolute bottom-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 transition-colors ${
+              ui.isDribbling
+                ? "bg-emerald-400"
+                : ui.ballInRange
+                ? "bg-yellow-400"
+                : "bg-white/70"
+            }`}
+          />
+          <div
+            className={`absolute left-0 top-1/2 h-0.5 w-2.5 -translate-y-1/2 transition-colors ${
+              ui.isDribbling
+                ? "bg-emerald-400"
+                : ui.ballInRange
+                ? "bg-yellow-400"
+                : "bg-white/70"
+            }`}
+          />
+          <div
+            className={`absolute right-0 top-1/2 h-0.5 w-2.5 -translate-y-1/2 transition-colors ${
+              ui.isDribbling
+                ? "bg-emerald-400"
+                : ui.ballInRange
+                ? "bg-yellow-400"
+                : "bg-white/70"
+            }`}
+          />
+          <div
+            className={`absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 transition-colors ${
+              ui.isDribbling
+                ? "bg-emerald-400 animate-ping"
+                : ui.ballInRange
+                ? "bg-yellow-400"
+                : "bg-white"
+            }`}
+          />
 
-          {/* Shot Charge Power Ring/Arc */}
+          {/* Shot Charge Power Ring */}
           {ui.chargeRatio > 0 && (
             <div
-              className="absolute -inset-3 rounded-full border-2 border-red-500 animate-spin"
+              className="absolute -inset-3.5 rounded-full border-2 border-red-500 animate-spin"
               style={{
                 borderColor:
                   ui.chargeRatio > 0.75
@@ -128,6 +188,13 @@ export const HUD: React.FC<HudProps> = ({
                 opacity: 0.8 + ui.chargeRatio * 0.2,
               }}
             />
+          )}
+
+          {/* Dynamic "BALL READY" badge */}
+          {ui.ballInRange && (
+            <div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap border border-yellow-400/80 bg-black/90 px-2 py-0.5 text-[9px] font-bold text-yellow-300 uppercase shadow-lg">
+              {ui.isDribbling ? "⚽ DRIBBLING · STRIKE READY" : "⚽ BALL IN RANGE"}
+            </div>
           )}
         </div>
       </div>
@@ -155,14 +222,16 @@ export const HUD: React.FC<HudProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-4 text-[10px] tracking-wider text-white/50 uppercase">
-            <span>[HOLD L-CLICK] SHOOT</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 border border-white/15 bg-black/60 px-4 py-1 text-[10px] tracking-wider text-white/70 uppercase backdrop-blur-xs">
+            <span>[HOLD L-CLICK] POWER SHOT</span>
             <span>·</span>
-            <span>[R-CLICK] LOB / CHIP</span>
+            <span>[R-CLICK] CHIP / LOB</span>
             <span>·</span>
-            <span>[SPACE] JUMP</span>
+            <span>[V] CAM VIEW</span>
             <span>·</span>
             <span>[SHIFT] SPRINT</span>
+            <span>·</span>
+            <span>[SPACE] JUMP</span>
           </div>
         )}
       </div>
@@ -205,13 +274,13 @@ export const HUD: React.FC<HudProps> = ({
         >
           <div className="border-2 border-white bg-black/90 px-8 py-5 text-center shadow-2xl transition-transform hover:scale-105 active:scale-95">
             <p className="text-base sm:text-lg font-black uppercase tracking-widest text-yellow-400 animate-pulse text-retro-glow">
-              ▶ CLICK SCREEN TO ENTER FPS MODE ◀
+              ▶ CLICK SCREEN TO PLAY ◀
             </p>
             <p className="mt-2 text-[12px] text-white/80 uppercase font-semibold">
               AIM WITH MOUSE · WASD TO RUN · HOLD LEFT-CLICK TO SHOOT
             </p>
-            <p className="mt-1 text-[10px] text-white/40 uppercase">
-              (Press ESC at any time to release mouse and open menu)
+            <p className="mt-1 text-[10px] text-white/50 uppercase">
+              Press [V] to switch between 3rd-Person and 1st-Person · ESC to pause
             </p>
           </div>
         </div>

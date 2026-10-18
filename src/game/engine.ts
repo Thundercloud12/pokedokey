@@ -7,8 +7,10 @@ import {
   TEAMS,
   BALL_CONFIG,
   PLAYER_CONFIG,
+  DRIBBLE_CONFIG,
   WIN_SCORE,
   type TeamId,
+  type CameraViewMode,
 } from "./constants";
 import {
   createPitchTexture,
@@ -40,6 +42,9 @@ export interface GameUiState {
   chargeRatio: number;
   ballAngleToPlayer: number; // in radians, for HUD compass/radar
   ballDistance: number;
+  ballInRange: boolean;
+  isDribbling: boolean;
+  cameraMode: CameraViewMode;
   mode: GameMode;
   roomCode: string;
   isHost: boolean;
@@ -65,9 +70,11 @@ export class FPSFootballEngine {
 
   // Visual Meshes
   ballMesh!: THREE.Mesh;
+  localPlayerMesh!: AnimatedPlayerMesh;
   opponentMesh!: AnimatedPlayerMesh;
   firstPersonVM!: THREE.Group;
   cameraShake = 0;
+  kickCooldown = 0;
 
   // Game Match State
   phase: "ready" | "countdown" | "play" | "goal" | "over" = "ready";
@@ -76,7 +83,7 @@ export class FPSFootballEngine {
   countdownTimer = 0;
   countdownStep = 3;
   countdownText = "";
-  pixelScale = 0.45; // 0.45 = Authentic chunky PS1/retro 90s pixel resolution
+  pixelScale = 0.45;
 
   onUiUpdate?: (ui: GameUiState) => void;
 
@@ -102,7 +109,7 @@ export class FPSFootballEngine {
 
     this.renderer = new THREE.WebGLRenderer({
       powerPreference: "high-performance",
-      antialias: false, // sharp retro pixels!
+      antialias: false,
     });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.BasicShadowMap;
@@ -145,7 +152,6 @@ export class FPSFootballEngine {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
 
-    // Logical low-res rendering scaled up with CSS pixelated styling
     const lowW = Math.max(320, Math.round(w * this.pixelScale));
     const lowH = Math.max(180, Math.round(h * this.pixelScale));
     this.renderer.setSize(lowW, lowH, false);
@@ -160,12 +166,21 @@ export class FPSFootballEngine {
     this.updateViewportSize();
   }
 
+  toggleCameraMode() {
+    this.controller.toggleViewMode();
+    this.updateMeshVisibility();
+  }
+
+  private updateMeshVisibility() {
+    const isThird = this.controller.viewMode === "thirdPerson";
+    if (this.localPlayerMesh) this.localPlayerMesh.visible = isThird;
+    if (this.firstPersonVM) this.firstPersonVM.visible = !isThird;
+  }
+
   private buildLighting() {
-    // Ambient stadium glow
     const ambient = new THREE.AmbientLight("#a0b5d0", 0.7);
     this.scene.add(ambient);
 
-    // 4 Corner Stadium Floodlight Towers
     const towerCoords = [
       [-PITCH.width / 2 - 4, -PITCH.length / 2 - 4],
       [PITCH.width / 2 + 4, -PITCH.length / 2 - 4],
@@ -183,7 +198,6 @@ export class FPSFootballEngine {
       this.scene.add(light);
       this.scene.add(light.target);
 
-      // Floodlight tower mesh
       const pole = new THREE.Mesh(
         new THREE.CylinderGeometry(0.3, 0.4, 18, 6),
         new THREE.MeshLambertMaterial({ color: "#374151" })
@@ -201,23 +215,18 @@ export class FPSFootballEngine {
   }
 
   private buildPitchAndStadium() {
-    // Grass Pitch Plane
     const pitchTex = createPitchTexture();
     const pitchGeom = new THREE.PlaneGeometry(PITCH.width, PITCH.length);
-    const pitchMat = new THREE.MeshLambertMaterial({
-      map: pitchTex,
-    });
+    const pitchMat = new THREE.MeshLambertMaterial({ map: pitchTex });
     const pitchMesh = new THREE.Mesh(pitchGeom, pitchMat);
     pitchMesh.rotation.x = -Math.PI / 2;
     pitchMesh.receiveShadow = true;
     this.scene.add(pitchMesh);
 
-    // Adboards around the perimeter
     const adTex = createAdBoardTexture();
     const adMat = new THREE.MeshLambertMaterial({ map: adTex });
     const boardH = 1.4;
 
-    // West & East sideline boards
     const sideBoardGeom = new THREE.BoxGeometry(0.3, boardH, PITCH.length);
     const westBoard = new THREE.Mesh(sideBoardGeom, adMat);
     westBoard.position.set(-PITCH.width / 2 - 0.2, boardH / 2, 0);
@@ -227,7 +236,6 @@ export class FPSFootballEngine {
     eastBoard.position.set(PITCH.width / 2 + 0.2, boardH / 2, 0);
     this.scene.add(eastBoard);
 
-    // North & South endline boards (flanking goals)
     const flankW = (PITCH.width - GOAL.width) / 2;
     const endBoardGeom = new THREE.BoxGeometry(flankW, boardH, 0.3);
 
@@ -247,11 +255,9 @@ export class FPSFootballEngine {
     sRight.position.set(GOAL.width / 2 + flankW / 2, boardH / 2, PITCH.length / 2 + 0.2);
     this.scene.add(sRight);
 
-    // Stadium Stands with Animated / Pixel Crowd
     const crowdTex = createCrowdTexture();
     const crowdMat = new THREE.MeshBasicMaterial({ map: crowdTex, side: THREE.DoubleSide });
 
-    // West & East stands
     const standGeom = new THREE.PlaneGeometry(PITCH.length + 8, 8);
     const westStand = new THREE.Mesh(standGeom, crowdMat);
     westStand.position.set(-PITCH.width / 2 - 5, 4, 0);
@@ -284,7 +290,6 @@ export class FPSFootballEngine {
     const gd = GOAL.depth;
     const pr = GOAL.postRadius;
 
-    // Left and Right Posts
     const postGeom = new THREE.CylinderGeometry(pr, pr, gh, 8);
     const lp = new THREE.Mesh(postGeom, postMat);
     lp.position.set(-halfGW, gh / 2, zLine);
@@ -296,7 +301,6 @@ export class FPSFootballEngine {
     rp.castShadow = true;
     this.scene.add(rp);
 
-    // Crossbar
     const barGeom = new THREE.CylinderGeometry(pr, pr, GOAL.width, 8);
     const bar = new THREE.Mesh(barGeom, postMat);
     bar.rotation.z = Math.PI / 2;
@@ -304,7 +308,6 @@ export class FPSFootballEngine {
     bar.castShadow = true;
     this.scene.add(bar);
 
-    // Net Box
     const backNetGeom = new THREE.PlaneGeometry(GOAL.width, gh);
     const backNet = new THREE.Mesh(backNetGeom, netMat);
     backNet.position.set(0, gh / 2, zLine + dir * gd);
@@ -331,37 +334,42 @@ export class FPSFootballEngine {
   private buildBall() {
     const ballTex = createBallTexture();
     const ballGeom = new THREE.SphereGeometry(BALL_CONFIG.radius, 16, 12);
-    const ballMat = new THREE.MeshLambertMaterial({
-      map: ballTex,
-    });
+    const ballMat = new THREE.MeshLambertMaterial({ map: ballTex });
     this.ballMesh = new THREE.Mesh(ballGeom, ballMat);
     this.ballMesh.castShadow = true;
     this.scene.add(this.ballMesh);
   }
 
   private buildPlayers() {
-    // 3D Opponent Avatar (Visible across the pitch)
+    // 3D Local Player Mesh (For Third-Person Mode)
+    this.localPlayerMesh = create3DPlayerModel(this.localTeam);
+    this.scene.add(this.localPlayerMesh);
+
+    // 3D Opponent Avatar
     this.opponentMesh = create3DPlayerModel(this.opponentTeam);
     this.scene.add(this.opponentMesh);
 
-    // 1st Person Kicking Viewmodel (Cleat attached to camera)
+    // 1st Person Kicking Viewmodel
     this.firstPersonVM = createFirstPersonViewModel(this.localTeam);
     this.camera.add(this.firstPersonVM);
     this.scene.add(this.camera);
+
+    this.updateMeshVisibility();
   }
 
   private bindGameEvents() {
-    // Controller kick event
-    this.controller.onKick = (kick) => {
-      this.handlePlayerKick(kick.power, kick.direction, kick.isLob);
+    this.controller.onViewModeChange = () => {
+      this.updateMeshVisibility();
     };
 
-    // Physics Goal event
+    this.controller.onKick = (kick) => {
+      this.handlePlayerKick(kick.power, kick.direction, kick.isLob, kick.elevationAngle);
+    };
+
     this.physics.onGoalScored = (event) => {
       this.handleGoal(event.scorerTeam);
     };
 
-    // Network Callbacks
     this.network.onConnected = () => {
       this.soundUnlock();
       this.startCountdown();
@@ -369,7 +377,6 @@ export class FPSFootballEngine {
 
     this.network.onPacket = (pkt) => {
       if (pkt.type === "state" && !this.network.isHost) {
-        // Guest receives authoritative state from host
         this.physics.ballBody.position.set(pkt.ball.x, pkt.ball.y, pkt.ball.z);
         this.physics.ballBody.velocity.set(pkt.ball.vx, pkt.ball.vy, pkt.ball.vz);
         this.physics.opponentBody.position.set(pkt.player.x, pkt.player.y, pkt.player.z);
@@ -379,57 +386,51 @@ export class FPSFootballEngine {
         this.score = pkt.score;
         this.phase = pkt.phase;
       } else if (pkt.type === "input" && this.network.isHost) {
-        // Host receives guest input
         this.physics.opponentBody.position.set(pkt.player.x, pkt.player.y, pkt.player.z);
         this.opponentMesh.rotation.y = pkt.player.yaw;
         animatePlayerModel(this.opponentMesh, 5, pkt.player.isKicking, 1 / 60);
       } else if (pkt.type === "kick") {
-        // Guest kicked ball, host applies physics
         const dir = new THREE.Vector3(...pkt.dir);
-        this.applyKickPhysics(this.physics.opponentBody, pkt.power, dir, pkt.isLob);
+        const elev = pkt.isLob ? THREE.MathUtils.degToRad(40) : THREE.MathUtils.degToRad(20);
+        this.applyKickPhysics(pkt.power, dir, elev);
       }
     };
   }
 
-  private handlePlayerKick(power: number, lookDir: THREE.Vector3, isLob: boolean) {
+  private handlePlayerKick(power: number, dir: THREE.Vector3, isLob: boolean, elevationAngle: number) {
     const pPos = this.physics.playerBody.position;
     const bPos = this.physics.ballBody.position;
-    const dist = pPos.distanceTo(bPos);
+    const dist = Math.hypot(pPos.x - bPos.x, pPos.z - bPos.z);
 
-    if (dist < PLAYER_CONFIG.kickReach) {
-      this.applyKickPhysics(this.physics.playerBody, power, lookDir, isLob);
+    if (dist < PLAYER_CONFIG.kickReach && bPos.y < 2.5) {
+      this.applyKickPhysics(power, dir, elevationAngle);
+      this.kickCooldown = DRIBBLE_CONFIG.kickCooldown;
+      this.controller.isDribbling = false;
 
       if (this.mode === "online") {
         this.network.send({
           type: "kick",
           power,
-          dir: [lookDir.x, lookDir.y, lookDir.z],
+          dir: [dir.x, dir.y, dir.z],
           isLob,
         });
       }
     } else {
-      // Swung and missed — play swoosh
       sound.play("swoosh");
     }
   }
 
-  private applyKickPhysics(
-    _kickerBody: CANNON.Body,
-    power: number,
-    dir: THREE.Vector3,
-    isLob: boolean
-  ) {
+  private applyKickPhysics(power: number, dir: THREE.Vector3, elevationAngle: number) {
     const ball = this.physics.ballBody;
 
-    // Calculate trajectory based on aim direction
-    let vx = dir.x * power;
-    let vz = dir.z * power;
-    let vy = isLob ? Math.max(9, power * 0.45) : Math.max(2.5, dir.y * power + 3.2);
+    const hSpeed = Math.cos(elevationAngle) * power;
+    const vSpeed = Math.sin(elevationAngle) * power;
 
-    ball.velocity.set(vx, vy, vz);
-    ball.angularVelocity.set(-vz * 0.5, 0, vx * 0.5);
+    ball.velocity.set(dir.x * hSpeed, vSpeed, dir.z * hSpeed);
+    ball.angularVelocity.set(-dir.z * 3, 0, dir.x * 3);
 
-    sound.play("kick", power / 35);
+    this.cameraShake = Math.min(0.35, power / 60);
+    sound.play("kick", Math.min(1, power / 32));
   }
 
   private handleGoal(scorer: TeamId) {
@@ -440,7 +441,6 @@ export class FPSFootballEngine {
     this.cameraShake = 0.45;
     sound.play("goal");
 
-    // Confetti celebration
     confetti({
       particleCount: 75,
       spread: 80,
@@ -471,7 +471,6 @@ export class FPSFootballEngine {
   }
 
   private resetMatchPositions() {
-    // Reset player spawns
     const pZ = TEAMS[this.localTeam].spawnZ;
     const oZ = TEAMS[this.opponentTeam].spawnZ;
 
@@ -498,21 +497,19 @@ export class FPSFootballEngine {
     this.winner = null;
 
     if (mode === "online" && roomCode) {
-      // Setup as guest
       this.localTeam = "blue";
       this.opponentTeam = "red";
       this.network.joinMatch(roomCode);
     } else if (mode === "online") {
-      // Setup as host
       this.localTeam = "red";
       this.opponentTeam = "blue";
       this.network.hostMatch();
     } else {
-      // Bot or practice
       this.localTeam = "red";
       this.opponentTeam = "blue";
       this.startCountdown();
     }
+    this.updateMeshVisibility();
   }
 
   private loop = (time: number) => {
@@ -522,7 +519,7 @@ export class FPSFootballEngine {
     const delta = Math.min(0.1, (time - this.lastTime) / 1000);
     this.lastTime = time;
 
-    // 1. Countdown Phase Handling
+    // 1. Countdown Phase
     if (this.phase === "countdown") {
       this.countdownTimer += delta;
       if (this.countdownTimer >= 0.85) {
@@ -549,12 +546,60 @@ export class FPSFootballEngine {
 
     this.controller.update(delta, this.physics.ballBody);
 
-    // 3. AI Bot Update (if in bot mode)
+    // 3. Magnetic Dribble Mechanic
+    if (this.kickCooldown > 0) {
+      this.kickCooldown -= delta;
+    }
+
+    const pPos = this.physics.playerBody.position;
+    const bPos = this.physics.ballBody.position;
+    const distToLocal = Math.hypot(pPos.x - bPos.x, pPos.z - bPos.z);
+
+    const canDribble =
+      this.phase === "play" &&
+      this.kickCooldown <= 0 &&
+      distToLocal < DRIBBLE_CONFIG.captureRadius &&
+      bPos.y < 2.0;
+
+    this.controller.isDribbling = canDribble;
+
+    if (canDribble) {
+      // Direct ball to spot in front of player's feet
+      const yaw = this.controller.yaw;
+      const fwdX = -Math.sin(yaw);
+      const fwdZ = -Math.cos(yaw);
+      const isSprinting = this.controller.keys.sprint;
+      const offset = isSprinting ? DRIBBLE_CONFIG.sprintOffset : DRIBBLE_CONFIG.targetOffset;
+
+      const targetX = pPos.x + fwdX * offset;
+      const targetZ = pPos.z + fwdZ * offset;
+
+      const toTargetX = targetX - bPos.x;
+      const toTargetZ = targetZ - bPos.z;
+
+      // Soft magnetic spring force
+      const spring = DRIBBLE_CONFIG.smoothFactor;
+      this.physics.ballBody.velocity.x +=
+        (toTargetX * spring + this.physics.playerBody.velocity.x - this.physics.ballBody.velocity.x) *
+        Math.min(1, delta * 12);
+      this.physics.ballBody.velocity.z +=
+        (toTargetZ * spring + this.physics.playerBody.velocity.z - this.physics.ballBody.velocity.z) *
+        Math.min(1, delta * 12);
+
+      // Natural roll spin
+      this.physics.ballBody.angularVelocity.set(
+        this.physics.ballBody.velocity.z * 1.5,
+        0,
+        -this.physics.ballBody.velocity.x * 1.5
+      );
+    }
+
+    // 4. AI Bot Update
     if (this.mode === "bot" && this.phase === "play") {
       this.bot.update(delta, this.physics.ballBody, this.physics.playerBody.position);
     }
 
-    // 4. Sync 3D Meshes with Physics Bodies
+    // 5. Sync 3D Meshes with Physics Bodies
     // Ball
     this.ballMesh.position.copy(
       this.physics.ballBody.position as unknown as THREE.Vector3
@@ -563,11 +608,29 @@ export class FPSFootballEngine {
       this.physics.ballBody.quaternion as unknown as THREE.Quaternion
     );
 
+    // Local Player Mesh (Visible in Third-Person mode)
+    if (this.localPlayerMesh.visible) {
+      this.localPlayerMesh.position.copy(
+        this.physics.playerBody.position as unknown as THREE.Vector3
+      );
+      this.localPlayerMesh.rotation.y = this.controller.yaw + Math.PI;
+
+      const localSpeed = Math.hypot(
+        this.physics.playerBody.velocity.x,
+        this.physics.playerBody.velocity.z
+      );
+      animatePlayerModel(
+        this.localPlayerMesh,
+        localSpeed,
+        this.controller.isKicking,
+        delta
+      );
+    }
+
     // Opponent Mesh
     this.opponentMesh.position.copy(
       this.physics.opponentBody.position as unknown as THREE.Vector3
     );
-    // Face movement or look direction
     if (this.mode === "bot") {
       const oppVel = this.physics.opponentBody.velocity;
       if (Math.hypot(oppVel.x, oppVel.z) > 0.3) {
@@ -581,28 +644,28 @@ export class FPSFootballEngine {
       );
     }
 
-    // 5. First-Person Viewmodel Kicking Animation
-    const leg = this.firstPersonVM.getObjectByName("kickingLeg");
-    if (leg) {
-      if (this.controller.isKicking) {
-        // Snap kick extension
-        leg.rotation.x = -1.1;
-        leg.position.z = -0.25;
-      } else {
-        // Return to resting position
-        leg.rotation.x *= 0.85;
-        leg.position.z *= 0.85;
+    // 6. First-Person Viewmodel Kicking Animation
+    if (this.firstPersonVM.visible) {
+      const leg = this.firstPersonVM.getObjectByName("kickingLeg");
+      if (leg) {
+        if (this.controller.isKicking) {
+          leg.rotation.x = -1.1;
+          leg.position.z = -0.25;
+        } else {
+          leg.rotation.x *= 0.85;
+          leg.position.z *= 0.85;
+        }
       }
     }
 
-    // 6. Camera Shake
+    // 7. Camera Shake
     if (this.cameraShake > 0) {
       this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
       this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
       this.cameraShake = Math.max(0, this.cameraShake - delta * 1.8);
     }
 
-    // 7. Network Stream (30 Hz sync)
+    // 8. Network Stream (30 Hz sync)
     if (this.mode === "online" && this.network.isConnected) {
       if (this.network.isHost) {
         const b = this.physics.ballBody;
@@ -642,20 +705,19 @@ export class FPSFootballEngine {
       }
     }
 
-    // 8. Calculate Compass Radar Angle to Ball
+    // 9. Calculate Radar / Compass Angle
     const camPos = this.camera.position;
     const ballPos = this.ballMesh.position;
     const dx = ballPos.x - camPos.x;
     const dz = ballPos.z - camPos.z;
     const angleToBall = Math.atan2(dx, dz);
-    // Relative to camera yaw
     let relAngle = angleToBall - (this.controller.yaw + Math.PI);
     while (relAngle > Math.PI) relAngle -= Math.PI * 2;
     while (relAngle < -Math.PI) relAngle += Math.PI * 2;
 
     const ballDist = Math.hypot(dx, dz);
 
-    // 9. Update UI Callbacks
+    // 10. Update UI Callbacks
     this.onUiUpdate?.({
       phase: this.phase,
       score: { ...this.score },
@@ -665,6 +727,9 @@ export class FPSFootballEngine {
       chargeRatio: this.controller.chargeRatio,
       ballAngleToPlayer: relAngle,
       ballDistance: ballDist,
+      ballInRange: this.controller.ballInRange,
+      isDribbling: this.controller.isDribbling,
+      cameraMode: this.controller.viewMode,
       mode: this.mode,
       roomCode: this.network.roomCode,
       isHost: this.network.isHost,
@@ -673,7 +738,7 @@ export class FPSFootballEngine {
       pixelScale: this.pixelScale,
     });
 
-    // 10. Render
+    // 11. Render
     this.renderer.render(this.scene, this.camera);
   };
 

@@ -1,10 +1,10 @@
 /**
- * Dimensions and tuning parameters for the 3D Pixel FPS Football Game.
+ * Dimensions and tuning parameters for the 3D Pixel Football Game.
  */
 
 export const PITCH = {
-  width: 38, // X-axis (left-to-right sideline)
-  length: 68, // Z-axis (endline to endline)
+  width: 36, // X-axis (left-to-right sideline)
+  length: 64, // Z-axis (endline to endline)
   wallHeight: 5,
   linePadX: 2.5,
   linePadZ: 3.5,
@@ -23,9 +23,18 @@ export const GOAL = {
 export const BALL_CONFIG = {
   radius: 0.42,
   mass: 0.45,
-  damping: 0.25,
-  restitution: 0.72,
-  friction: 0.4,
+  damping: 0.28,
+  angularDamping: 0.35,
+  restitution: 0.65,
+  friction: 0.45,
+};
+
+export const DRIBBLE_CONFIG = {
+  captureRadius: 2.2, // Proximity within which soft magnetic dribble activates
+  targetOffset: 1.25, // Distance ahead of player feet while walking
+  sprintOffset: 1.85, // Distance ahead while sprinting (heavier touch)
+  smoothFactor: 14.0, // Lerp smoothing factor for natural ball roll
+  kickCooldown: 0.35, // Brief seconds after kick before re-capturing
 };
 
 export const PLAYER_CONFIG = {
@@ -33,15 +42,31 @@ export const PLAYER_CONFIG = {
   height: 1.8,
   eyeHeight: 1.62,
   mass: 75,
-  walkSpeed: 10,
-  sprintSpeed: 15,
+  walkSpeed: 9.5,
+  sprintSpeed: 14.5,
+  accel: 28.0,
+  decel: 18.0,
   jumpSpeed: 7.2,
-  kickReach: 2.2, // Max distance from player feet to ball to register a kick
-  dribbleReach: 1.3,
-  kickMinPower: 14,
-  kickMaxPower: 34,
-  maxChargeTimeMs: 900,
+  kickReach: 2.6, // Generous and responsive kick reach
+  kickMinPower: 16,
+  kickMaxPower: 36,
+  maxChargeTimeMs: 850,
 };
+
+export const CAMERA_CONFIG = {
+  thirdPerson: {
+    distance: 3.6,
+    height: 2.2,
+    pitchOffset: -0.15, // slight downward look at the player and ball
+    fov: 75,
+  },
+  firstPerson: {
+    eyeHeight: 1.55,
+    fov: 90, // wide field of view so ball stays in view
+  },
+};
+
+export type CameraViewMode = "thirdPerson" | "firstPerson";
 
 export const TEAMS = {
   red: {

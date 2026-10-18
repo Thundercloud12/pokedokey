@@ -113,11 +113,11 @@ export class PhysicsWorld {
       })
     );
 
-    // Ball on Player
+    // Ball on Player (Soft foot trap cushion, not an elastic pinball ricochet!)
     this.world.addContactMaterial(
       new CANNON.ContactMaterial(this.ballMaterial, this.playerMaterial, {
-        restitution: 0.6,
-        friction: 0.3,
+        restitution: 0.15,
+        friction: 0.6,
       })
     );
   }
