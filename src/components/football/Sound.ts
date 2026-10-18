@@ -1,26 +1,19 @@
 /**
- * Procedural Web Audio API sound synthesizer for the FPS Football Game.
- * Inspired by the retro synth engine in the original portfolio football game.
- * Zero external audio files required!
+ * Football sound effects: everything is synthesized with the Web Audio API,
+ * so there are no audio files to ship or load.
+ *
+ * Usage:
+ *   sound.unlock()          // call from a click / tap / keypress (browsers require a gesture)
+ *   sound.play("kick", 0.8) // name + optional volume 0..1
+ *   sound.ambience(true)    // quiet crowd murmur
+ *   sound.setMuted(true)
  */
-
-export type SfxName =
-  | "kick"
-  | "bounce"
-  | "thud"
-  | "post"
-  | "jump"
-  | "tick"
-  | "go"
-  | "goal"
-  | "win"
-  | "lose"
-  | "swoosh";
+import type { SfxName } from "./engine";
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
 const MASTER_VOL = 0.8;
-const MUTE_KEY = "fps-football-muted";
+const MUTE_KEY = "football-muted";
 
 class SoundBox {
   muted = false;
@@ -38,6 +31,7 @@ class SoundBox {
     } catch {
       /* storage blocked: ignore */
     }
+    // stop audio when the tab is in the background
     document.addEventListener("visibilitychange", () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
@@ -45,7 +39,7 @@ class SoundBox {
     });
   }
 
-  /** Create / resume the AudioContext on first user gesture. */
+  /** Create / resume the AudioContext. Must be called from a user gesture at least once. */
   unlock() {
     if (typeof window === "undefined") return;
     if (!this.ctx) {
@@ -56,7 +50,7 @@ class SoundBox {
       this.master.gain.value = this.muted ? 0 : MASTER_VOL;
       this.master.connect(this.ctx.destination);
 
-      // 1 second of white noise reused for procedural sound shaping
+      // one second of white noise, reused by every "noisy" sound
       const len = this.ctx.sampleRate;
       const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const d = buf.getChannelData(0);
@@ -79,9 +73,10 @@ class SoundBox {
     }
   }
 
+  /* ----------------------------- building blocks ---------------------------- */
+
   private tone(freq: number, end: number, dur: number, type: OscillatorType, vol: number, delay = 0) {
-    if (!this.ctx || !this.master) return;
-    const c = this.ctx;
+    const c = this.ctx!;
     const t = c.currentTime + delay;
     const o = c.createOscillator();
     const g = c.createGain();
@@ -92,7 +87,7 @@ class SoundBox {
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(this.master);
+    g.connect(this.master!);
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -104,10 +99,9 @@ class SoundBox {
     f0: number,
     f1: number,
     delay = 0,
-    attack = 0.004
+    attack = 0.004,
   ) {
-    if (!this.ctx || !this.master || !this.noiseBuf) return;
-    const c = this.ctx;
+    const c = this.ctx!;
     const t = c.currentTime + delay;
     const s = c.createBufferSource();
     s.buffer = this.noiseBuf;
@@ -122,14 +116,14 @@ class SoundBox {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f);
     f.connect(g);
-    g.connect(this.master);
+    g.connect(this.master!);
     s.start(t, Math.random() * 0.5);
     s.stop(t + dur + 0.02);
   }
 
+  /** Referee pea-whistle: a high sine with a fast tremolo. */
   private whistle(dur: number, delay = 0) {
-    if (!this.ctx || !this.master) return;
-    const c = this.ctx;
+    const c = this.ctx!;
     const t = c.currentTime + delay;
     const o = c.createOscillator();
     const g = c.createGain();
@@ -147,12 +141,14 @@ class SoundBox {
     lfo.connect(lg);
     lg.connect(g.gain);
     o.connect(g);
-    g.connect(this.master);
+    g.connect(this.master!);
     o.start(t);
     lfo.start(t);
     o.stop(t + dur + 0.02);
     lfo.stop(t + dur + 0.02);
   }
+
+  /* --------------------------------- effects -------------------------------- */
 
   play = (name: SfxName, v = 1) => {
     if (this.muted || !this.ctx || !this.master || this.ctx.state === "closed") return;
@@ -160,8 +156,8 @@ class SoundBox {
 
     switch (name) {
       case "kick":
-        this.noise(0.09, 0.55 * k, "lowpass", 1800, 300);
-        this.tone(170, 55, 0.12, "sine", 0.6 * k);
+        this.noise(0.09, 0.5 * k, "lowpass", 1800, 300);
+        this.tone(170, 55, 0.12, "sine", 0.55 * k);
         break;
 
       case "bounce":
@@ -169,64 +165,59 @@ class SoundBox {
         this.noise(0.05, 0.12 * k, "lowpass", 600, 200);
         break;
 
-      case "thud":
+      case "thud": // ball hits a player's head / body
         this.noise(0.07, 0.35 * k, "lowpass", 700, 200);
         this.tone(100, 50, 0.08, "sine", 0.3 * k);
         break;
 
-      case "post": // hollow resonant metal ping
-        this.tone(1250, 1180, 0.35, "triangle", 0.4 * k);
-        this.tone(1880, 1800, 0.22, "sine", 0.22 * k);
-        this.noise(0.03, 0.25 * k, "highpass", 3000, 3000);
-        break;
-
-      case "swoosh":
-        this.noise(0.14, 0.2 * k, "bandpass", 1200, 400);
+      case "post": // crossbar ping
+        this.tone(1250, 1180, 0.35, "triangle", 0.35 * k);
+        this.tone(1880, 1800, 0.22, "sine", 0.18 * k);
+        this.noise(0.03, 0.2 * k, "highpass", 3000, 3000);
         break;
 
       case "jump":
-        this.tone(260, 520, 0.1, "square", 0.06);
+        this.tone(260, 520, 0.1, "square", 0.05);
         break;
 
-      case "tick":
-        this.tone(660, 660, 0.1, "square", 0.08);
+      case "tick": // 3 - 2 - 1
+        this.tone(660, 660, 0.1, "square", 0.07);
         break;
 
       case "go":
         this.whistle(0.4);
-        this.tone(880, 880, 0.2, "square", 0.06);
+        this.tone(880, 880, 0.2, "square", 0.05);
         break;
 
       case "goal":
-        this.noise(2.0, 0.6, "bandpass", 600, 1100, 0, 0.3); // crowd cheer
-        this.noise(1.5, 0.2, "highpass", 2500, 3500, 0, 0.2);
-        [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.18, "square", 0.08, i * 0.09));
-        this.tone(1047, 1047, 0.45, "triangle", 0.14, 0.36);
+        this.noise(1.8, 0.5, "bandpass", 600, 1100, 0, 0.3); // crowd roar
+        this.noise(1.3, 0.18, "highpass", 2500, 3500, 0, 0.2); // sparkle on top
+        [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.18, "square", 0.07, i * 0.09));
+        this.tone(1047, 1047, 0.45, "triangle", 0.12, 0.36);
         break;
 
       case "win":
         this.whistle(0.18);
         this.whistle(0.18, 0.25);
         this.whistle(0.5, 0.5);
-        this.noise(2.2, 0.5, "bandpass", 700, 1200, 0.4, 0.4);
-        [523, 659, 784, 1047, 1319].forEach((f, i) =>
-          this.tone(f, f, 0.22, "triangle", 0.14, 0.6 + i * 0.12)
-        );
-        this.tone(1047, 1047, 0.7, "triangle", 0.12, 1.25);
-        this.tone(1319, 1319, 0.7, "triangle", 0.1, 1.25);
+        this.noise(2.2, 0.45, "bandpass", 700, 1200, 0.4, 0.4);
+        [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, f, 0.22, "triangle", 0.12, 0.6 + i * 0.12));
+        this.tone(1047, 1047, 0.7, "triangle", 0.1, 1.25);
+        this.tone(1319, 1319, 0.7, "triangle", 0.08, 1.25);
         break;
 
       case "lose":
         this.whistle(0.18);
         this.whistle(0.18, 0.25);
         this.whistle(0.5, 0.5);
-        [392, 330, 262, 196].forEach((f, i) =>
-          this.tone(f, f * 0.97, 0.3, "triangle", 0.14, 1.1 + i * 0.24)
-        );
+        [392, 330, 262, 196].forEach((f, i) => this.tone(f, f * 0.97, 0.3, "triangle", 0.12, 1.1 + i * 0.24));
         break;
     }
   };
 
+  /* -------------------------------- ambience -------------------------------- */
+
+  /** Quiet crowd murmur under the match. Safe to call before unlock(). */
   ambience(on: boolean) {
     this.wantAmb = on;
     if (on) this.startAmb();
@@ -234,7 +225,7 @@ class SoundBox {
   }
 
   private startAmb() {
-    if (this.amb || !this.ctx || !this.master || !this.noiseBuf) return;
+    if (this.amb || !this.ctx || !this.noiseBuf) return;
     const c = this.ctx;
     const s = c.createBufferSource();
     s.buffer = this.noiseBuf;
@@ -247,7 +238,7 @@ class SoundBox {
     g.gain.exponentialRampToValueAtTime(0.05, c.currentTime + 1);
     s.connect(f);
     f.connect(g);
-    g.connect(this.master);
+    if (this.master) g.connect(this.master);
     s.start();
     this.amb = { src: s, gain: g };
   }
