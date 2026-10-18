@@ -31,8 +31,8 @@ const gameServer = new Server({
   }),
 });
 
-// Register battle rooms
-gameServer.define("battle_room", BattleRoom);
+// Register battle rooms with roomCode filtering
+gameServer.define("battle_room", BattleRoom).filterBy(["roomCode"]);
 
 gameServer.listen(port).then(() => {
   console.log(`⚔️  Creature Arena Colyseus Server running on ws://localhost:${port}`);
