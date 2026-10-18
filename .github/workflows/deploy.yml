@@ -1,0 +1,80 @@
+name: Deploy Game Server to EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute Lowercase Image Name
+        run: |
+          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/creature-arena-server" >> $GITHUB_ENV
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: IMAGE_NAME
+          script: |
+            set -e
+            echo "🚀 Pulling latest Docker image: $IMAGE_NAME:latest"
+            docker pull $IMAGE_NAME:latest
+
+            echo "🛑 Stopping previous container (if running)..."
+            docker stop creature-server || true
+            docker rm creature-server || true
+
+            echo "▶️ Starting new container..."
+            docker run -d \
+              --name creature-server \
+              --restart unless-stopped \
+              -p 2567:2567 \
+              $IMAGE_NAME:latest
+
+            echo "🧹 Pruning old dangling images..."
+            docker image prune -f
+
+            echo "🔍 Verifying health endpoint..."
+            sleep 2
+            curl -fsS http://localhost:2567/health
+            echo ""
+            echo "✅ Deployment successful!"

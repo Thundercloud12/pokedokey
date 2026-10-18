@@ -1,0 +1,12 @@
+# Example Caddyfile configuration for your EC2 host.
+# Copy this to /etc/caddy/Caddyfile on your EC2 instance.
+#
+# Option A: With your custom domain (automatic free Let's Encrypt SSL)
+# arena.yourdomain.com {
+#     reverse_proxy localhost:2567
+# }
+#
+# Option B: Without a domain (Direct HTTP over your EC2 Public IP)
+:80 {
+    reverse_proxy localhost:2567
+}
