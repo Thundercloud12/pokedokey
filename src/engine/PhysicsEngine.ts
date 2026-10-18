@@ -4,6 +4,7 @@ import { HitboxManager, type HitResult, type TargetEntity } from "./Hitbox";
 import { generateArenaBackground, type ArenaPlatform } from "../render/ArenaBackground";
 import { drawCreature } from "../render/CreatureSprite";
 import { sound } from "../audio/Sound";
+import { type WorldSnapshot } from "../net/TrysteroRoom";
 
 export type BattlePhase = "ready" | "countdown" | "battle" | "round_end" | "match_over";
 
@@ -660,6 +661,154 @@ export class PhysicsEngine {
       ctx.fillText(this.flash.text, this.W / 2 + 1, this.H * 0.35 + 1);
       ctx.fillStyle = this.flash.color;
       ctx.fillText(this.flash.text, this.W / 2, this.H * 0.35);
+      ctx.textAlign = "left";
+    }
+
+    ctx.restore();
+  }
+
+  getWorldSnapshot(): WorldSnapshot {
+    return {
+      frame: this.frame,
+      phase: this.phase,
+      round: this.currentRound,
+      left: {
+        x: this.leftState.x,
+        y: this.leftState.y,
+        vx: this.leftState.vx,
+        vy: this.leftState.vy,
+        facing: this.leftState.facing,
+        onGround: this.leftState.onGround,
+        anim: this.leftState.anim,
+        hp: this.leftState.hp,
+        maxHp: this.leftState.maxHp,
+        cooldowns: [...this.leftState.cooldowns] as [number, number, number, number],
+        castT: this.leftState.castT,
+        hurtT: this.leftState.hurtT,
+        stunT: this.leftState.stunT,
+        slowT: this.leftState.slowT,
+        burnT: this.leftState.burnT,
+        isKo: this.leftState.isKo,
+        roundsWon: this.leftState.roundsWon,
+      },
+      right: {
+        x: this.rightState.x,
+        y: this.rightState.y,
+        vx: this.rightState.vx,
+        vy: this.rightState.vy,
+        facing: this.rightState.facing,
+        onGround: this.rightState.onGround,
+        anim: this.rightState.anim,
+        hp: this.rightState.hp,
+        maxHp: this.rightState.maxHp,
+        cooldowns: [...this.rightState.cooldowns] as [number, number, number, number],
+        castT: this.rightState.castT,
+        hurtT: this.rightState.hurtT,
+        stunT: this.rightState.stunT,
+        slowT: this.rightState.slowT,
+        burnT: this.rightState.burnT,
+        isKo: this.rightState.isKo,
+        roundsWon: this.rightState.roundsWon,
+      },
+      hitboxes: this.hitboxMgr.hitboxes.map((h) => ({
+        x: h.x,
+        y: h.y,
+        radius: h.radius,
+        shape: h.move.shape,
+        color: h.color,
+      })),
+      particles: this.particles.map((p) => ({ x: p.x, y: p.y, color: p.color })),
+      popups: this.popups.map((p) => ({ x: p.x, y: p.y, text: p.text, color: p.color })),
+      flash: { ...this.flash },
+      shake: this.shake,
+    };
+  }
+
+  renderSnapshot(ctx: CanvasRenderingContext2D, snap: WorldSnapshot) {
+    ctx.save();
+    if (snap.shake > 0) {
+      ctx.translate(
+        Math.round((Math.random() - 0.5) * 3),
+        Math.round((Math.random() - 0.5) * 3)
+      );
+    }
+
+    // 1. Draw Arena Background
+    ctx.drawImage(this.bgCanvas, 0, 0);
+
+    // 2. Creature Shadows
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    for (const st of [snap.left, snap.right]) {
+      const sw = Math.round(12 - Math.min(6, (this.groundY - st.y - PH) / 10));
+      ctx.fillRect(Math.round(st.x + PW / 2 - sw / 2), this.groundY, sw, 2);
+    }
+
+    // 3. Draw Creatures
+    drawCreature(ctx, this.leftState.creature, {
+      x: snap.left.x,
+      y: snap.left.y,
+      facing: snap.left.facing,
+      vx: snap.left.vx,
+      onGround: snap.left.onGround,
+      anim: snap.left.anim,
+      castT: snap.left.castT,
+      hurtT: snap.left.hurtT,
+      isKo: snap.left.isKo,
+    });
+
+    drawCreature(ctx, this.rightState.creature, {
+      x: snap.right.x,
+      y: snap.right.y,
+      facing: snap.right.facing,
+      vx: snap.right.vx,
+      onGround: snap.right.onGround,
+      anim: snap.right.anim,
+      castT: snap.right.castT,
+      hurtT: snap.right.hurtT,
+      isKo: snap.right.isKo,
+    });
+
+    // 4. Draw Active Hitboxes
+    for (const hb of snap.hitboxes) {
+      ctx.fillStyle = hb.color;
+      if (hb.shape === "projectile") {
+        ctx.fillRect(Math.round(hb.x - 3), Math.round(hb.y - 3), 6, 6);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(Math.round(hb.x - 1), Math.round(hb.y - 1), 2, 2);
+      } else if (hb.shape === "aoe") {
+        ctx.strokeStyle = hb.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(hb.x, hb.y, hb.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.fillRect(Math.round(hb.x - hb.radius), Math.round(hb.y - hb.radius), hb.radius * 2, hb.radius * 2);
+      }
+    }
+
+    // 5. Draw Particles
+    for (const p of snap.particles) {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    }
+
+    // 6. Draw Damage Popups
+    for (const pop of snap.popups) {
+      ctx.fillStyle = "#000000";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText(pop.text, pop.x + 1, pop.y + 1);
+      ctx.fillStyle = pop.color;
+      ctx.fillText(pop.text, pop.x, pop.y);
+    }
+
+    // 7. Flash Text Announcement
+    if (snap.flash.t > 0) {
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#000000";
+      ctx.fillText(snap.flash.text, this.W / 2 + 1, this.H * 0.35 + 1);
+      ctx.fillStyle = snap.flash.color;
+      ctx.fillText(snap.flash.text, this.W / 2, this.H * 0.35);
       ctx.textAlign = "left";
     }
 

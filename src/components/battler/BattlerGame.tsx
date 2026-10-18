@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import Peer, { type DataConnection } from "peerjs";
 import { Volume2, VolumeX, ArrowLeft, Smartphone } from "lucide-react";
-import { CREATURES, type Creature } from "../../data/creatures";
+import { CREATURES, CREATURE_MAP, type Creature } from "../../data/creatures";
 import { MOVES } from "../../data/moves";
 import { TYPE_META } from "../../data/typeChart";
 import {
@@ -15,11 +14,14 @@ import { sound } from "../../audio/Sound";
 import { Hud } from "../../render/Hud";
 import { SelectScreen, type PlayMode } from "../../ui/SelectScreen";
 import { ResultScreen } from "../../ui/ResultScreen";
+import { network, type WorldSnapshot } from "../../net/TrysteroRoom";
 
 const STEP_MS = 1000 / 60;
 
 interface ArenaCanvasProps {
   engine: PhysicsEngine | null;
+  mode: PlayMode;
+  isHost: boolean;
   getP1Controls: () => BattleControls;
   getP2Controls: () => BattleControls;
   onSnapshot: (snap: {
@@ -28,13 +30,17 @@ interface ArenaCanvasProps {
     left: CreatureState;
     right: CreatureState;
   }) => void;
+  remoteSnapshotRef: React.MutableRefObject<WorldSnapshot | null>;
 }
 
 function ArenaCanvas({
   engine,
+  mode,
+  isHost,
   getP1Controls,
   getP2Controls,
   onSnapshot,
+  remoteSnapshotRef,
 }: ArenaCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,6 +63,8 @@ function ArenaCanvas({
     canvas.height = engine.H;
     ctx.imageSmoothingEnabled = false;
 
+    const isGuest = mode === "online" && !isHost;
+
     const frame = (t: number) => {
       raf = requestAnimationFrame(frame);
       if (!visible || document.hidden) {
@@ -67,6 +75,24 @@ function ArenaCanvas({
       acc += Math.min(100, t - last);
       last = t;
 
+      if (isGuest) {
+        // Guest mode: render authoritative host snapshot
+        if (remoteSnapshotRef.current) {
+          const snap = remoteSnapshotRef.current;
+          engine.renderSnapshot(ctx, snap);
+          cb.current.onSnapshot({
+            phase: snap.phase,
+            round: snap.round,
+            left: { ...engine.leftState, ...snap.left },
+            right: { ...engine.rightState, ...snap.right },
+          });
+        }
+        // Stream guest inputs to host every frame
+        network.sendControls(cb.current.getP1Controls());
+        return;
+      }
+
+      // Host or Local: simulate physics
       let n = 0;
       while (acc >= STEP_MS && n < 5) {
         engine.setControls(cb.current.getP1Controls(), cb.current.getP2Controls());
@@ -78,6 +104,12 @@ function ArenaCanvas({
 
       engine.render(ctx);
       frameCount++;
+
+      // If online host, broadcast world snapshot to guest
+      if (mode === "online" && isHost) {
+        const world = engine.getWorldSnapshot();
+        network.sendWorld(world);
+      }
 
       // Emit snapshot for HUD every 2 frames (~30Hz update)
       if (frameCount % 2 === 0) {
@@ -99,7 +131,7 @@ function ArenaCanvas({
       cancelAnimationFrame(raf);
       io.disconnect();
     };
-  }, [engine]);
+  }, [engine, mode, isHost, remoteSnapshotRef]);
 
   return (
     <div ref={wrapRef} className="absolute inset-0 overflow-hidden bg-[#070b18]">
@@ -136,8 +168,86 @@ export function BattlerGame() {
   const [peerConnected, setPeerConnected] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const peerRef = useRef<Peer | null>(null);
-  const connRef = useRef<DataConnection | null>(null);
+  const p1CreatureRef = useRef(p1Creature);
+  p1CreatureRef.current = p1Creature;
+  const p2CreatureRef = useRef(p2Creature);
+  p2CreatureRef.current = p2Creature;
+  const isHostRef = useRef(isHost);
+  isHostRef.current = isHost;
+
+  const remoteControlsRef = useRef<BattleControls>(emptyBattleControls());
+  const remoteSnapshotRef = useRef<WorldSnapshot | null>(null);
+
+  // Setup Trystero Network Listeners
+  useEffect(() => {
+    network.onControlsReceived = (ctl) => {
+      remoteControlsRef.current = ctl;
+    };
+
+    network.onWorldReceived = (snap) => {
+      remoteSnapshotRef.current = snap;
+      if (screen !== "arena") {
+        sound.unlock();
+        const eng = new PhysicsEngine(
+          320,
+          170,
+          p1CreatureRef.current,
+          p2CreatureRef.current,
+          false
+        );
+        setEngine(eng);
+        setSnapshot({
+          phase: snap.phase,
+          round: snap.round,
+          left: { ...eng.leftState, ...snap.left },
+          right: { ...eng.rightState, ...snap.right },
+        });
+        setScreen("arena");
+        sound.ambience(true);
+      }
+    };
+
+    network.onRosterReceived = (roster) => {
+      const opp = CREATURE_MAP[roster.creatureId];
+      if (opp) {
+        setP2Creature(opp);
+      }
+      setPeerConnected(true);
+
+      // If Host, start the online match once guest creature is synced
+      if (isHostRef.current) {
+        sound.unlock();
+        const eng = new PhysicsEngine(
+          320,
+          170,
+          p1CreatureRef.current,
+          opp || p2CreatureRef.current,
+          false
+        );
+        eng.startMatch();
+        setEngine(eng);
+        setSnapshot(eng.getSnapshot());
+        setScreen("arena");
+        sound.ambience(true);
+      }
+    };
+
+    network.onPeerJoin = () => {
+      setPeerConnected(true);
+      network.sendRoster({
+        creatureId: p1CreatureRef.current.id,
+        isHost: isHostRef.current,
+      });
+    };
+
+    network.onPeerLeave = () => {
+      setPeerConnected(false);
+    };
+
+    return () => {
+      network.leave();
+    };
+  }, [screen]);
 
   // Engine instance & HUD snapshot state
   const [engine, setEngine] = useState<PhysicsEngine | null>(null);
@@ -170,6 +280,9 @@ export function BattlerGame() {
   }, []);
 
   const getP2Controls = useCallback(() => {
+    if (mode === "online" && isHost) {
+      return remoteControlsRef.current;
+    }
     const m = mergedP2.current;
     m.left = kbP2.current.left || tcP2.current.left;
     m.right = kbP2.current.right || tcP2.current.right;
@@ -179,7 +292,7 @@ export function BattlerGame() {
     m.move3 = kbP2.current.move3 || tcP2.current.move3;
     m.move4 = kbP2.current.move4 || tcP2.current.move4;
     return m;
-  }, []);
+  }, [mode, isHost]);
 
   const toggleMute = () => {
     sound.unlock();
@@ -232,14 +345,6 @@ export function BattlerGame() {
         else if (k === "o") { kbP2.current.move4 = down; hit = true; }
       }
 
-      // In Online mode, send local inputs across the WebRTC connection
-      if (mode === "online" && connRef.current && connRef.current.open) {
-        connRef.current.send({
-          type: "controls",
-          ctl: isHost ? kbP1.current : kbP2.current,
-        });
-      }
-
       return hit;
     };
 
@@ -270,13 +375,12 @@ export function BattlerGame() {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", clear);
     };
-  }, [screen, mode, isHost]);
+  }, [screen, mode]);
 
-  // Start / Init Match
+  // Start / Init Match (Solo / Local)
   const startMatch = useCallback(() => {
     sound.unlock();
     const isAiBot = mode === "solo";
-    // Dimensions: logical canvas 320 x 170
     const eng = new PhysicsEngine(320, 170, p1Creature, p2Creature, isAiBot);
     eng.startMatch();
     setEngine(eng);
@@ -285,62 +389,25 @@ export function BattlerGame() {
     sound.ambience(true);
   }, [mode, p1Creature, p2Creature]);
 
-  // Online Multiplayer Handlers
+  // Online Trystero Handlers
   const handleHostOnline = () => {
     setIsHost(true);
+    isHostRef.current = true;
+    setMode("online");
     const code = "ARENA-" + Math.floor(1000 + Math.random() * 9000);
     setRoomCode(code);
     setOnlineTab("host");
-
-    const peer = new Peer(code);
-    peerRef.current = peer;
-
-    peer.on("open", (id) => setRoomCode(id));
-    peer.on("connection", (c) => {
-      connRef.current = c;
-      c.on("open", () => {
-        setPeerConnected(true);
-        // Transmit creature choice
-        c.send({ type: "creature_sync", creature: p1Creature });
-        startMatch();
-      });
-      c.on("data", (data: unknown) => {
-        const d = data as { type: string; ctl?: BattleControls; creature?: Creature };
-        if (d.type === "controls" && d.ctl) {
-          kbP2.current = d.ctl;
-        } else if (d.type === "creature_sync" && d.creature) {
-          setP2Creature(d.creature);
-        }
-      });
-    });
+    network.join(code, true);
   };
 
   const handleJoinOnline = () => {
     if (!joinCodeInput.trim()) return;
     setIsHost(false);
+    isHostRef.current = false;
+    setMode("online");
     const code = joinCodeInput.trim().toUpperCase();
-
-    const peer = new Peer();
-    peerRef.current = peer;
-
-    peer.on("open", () => {
-      const c = peer.connect(code);
-      connRef.current = c;
-      c.on("open", () => {
-        setPeerConnected(true);
-        setMode("online");
-        c.send({ type: "creature_sync", creature: p1Creature });
-        startMatch();
-      });
-      c.on("data", (data: unknown) => {
-        const d = data as { type: string; ctl?: BattleControls; creature?: Creature };
-        if (d.type === "controls" && d.ctl) {
-          kbP2.current = d.ctl;
-        } else if (d.type === "creature_sync" && d.creature) {
-          setP2Creature(d.creature);
-        }
-      });
-    });
+    setRoomCode(code);
+    network.join(code, false);
   };
 
   const handlePlayAgain = () => {
@@ -352,6 +419,8 @@ export function BattlerGame() {
 
   const handleChangeCreature = () => {
     sound.ambience(false);
+    network.leave();
+    setPeerConnected(false);
     setScreen("select");
   };
 
@@ -439,9 +508,12 @@ export function BattlerGame() {
             {/* Arena Canvas */}
             <ArenaCanvas
               engine={engine}
+              mode={mode}
+              isHost={isHost}
               getP1Controls={getP1Controls}
               getP2Controls={getP2Controls}
               onSnapshot={setSnapshot}
+              remoteSnapshotRef={remoteSnapshotRef}
             />
 
             {/* CRT Scanline Retro Overlay */}

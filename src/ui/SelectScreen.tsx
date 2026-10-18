@@ -449,35 +449,58 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                   <div className="flex flex-col items-center gap-1.5">
                     <div className="flex items-center gap-2 border border-amber-400 bg-black/80 px-3 py-1.5">
                       <span className="font-mono text-base font-bold text-amber-400">
-                        {roomCode || "GENERATING..."}
+                        {roomCode || "CONNECTING..."}
                       </span>
                       <button
                         type="button"
                         onClick={onCopyRoomCode}
-                        className="text-xs hover:text-amber-300"
+                        className="text-xs hover:text-amber-300 font-bold"
                       >
-                        {copied ? "COPIED" : "COPY"}
+                        {copied ? "COPIED!" : "COPY"}
                       </button>
                     </div>
                     <span className="text-[9px] text-white/60 uppercase">
-                      Share room code. Waiting for peer...
+                      {peerConnected
+                        ? "⚡ Challenger connected! Launching..."
+                        : "Share room code with your friend. Waiting to connect..."}
                     </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="ENTER CODE..."
-                      value={joinCodeInput}
-                      onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                      className="w-full border border-white/40 bg-black/60 px-2 py-1 text-xs text-white uppercase"
-                    />
                     <button
                       type="button"
-                      onClick={onJoinOnline}
-                      className="border border-white bg-white px-3 py-1 text-xs font-bold text-black uppercase"
+                      onClick={() => setOnlineTab("menu")}
+                      className="text-[9px] text-white/40 hover:text-white underline mt-1"
                     >
-                      JOIN
+                      ← Back to menu
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="ENTER ROOM CODE..."
+                        value={joinCodeInput}
+                        onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                        className="w-full border border-white/40 bg-black/60 px-2 py-1 text-xs text-white uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={onJoinOnline}
+                        className="border border-white bg-white px-3 py-1 text-xs font-bold text-black uppercase hover:bg-white/90"
+                      >
+                        JOIN
+                      </button>
+                    </div>
+                    {peerConnected && (
+                      <span className="text-[9px] text-emerald-400 font-bold uppercase text-center">
+                        ⚡ Connected to Host! Launching match...
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setOnlineTab("menu")}
+                      className="text-[9px] text-white/40 hover:text-white underline self-center"
+                    >
+                      ← Back to menu
                     </button>
                   </div>
                 )}
