@@ -50,16 +50,34 @@ export class FPSController {
     this.bindEvents();
   }
 
+  requestLock() {
+    if (!this.domElement) return;
+    try {
+      const p = this.domElement.requestPointerLock() as unknown as Promise<void> | undefined;
+      if (p && typeof p.catch === "function") {
+        p.catch((err) => {
+          console.warn("Pointer lock request failed:", err);
+        });
+      }
+    } catch (err) {
+      console.warn("Pointer lock error:", err);
+    }
+  }
+
   private bindEvents() {
     this.domElement.addEventListener("click", () => {
       if (!this.isLocked) {
-        this.domElement.requestPointerLock();
+        this.requestLock();
       }
     });
 
     document.addEventListener("pointerlockchange", () => {
       this.isLocked = document.pointerLockElement === this.domElement;
       this.onLockChange?.(this.isLocked);
+    });
+
+    document.addEventListener("pointerlockerror", (e) => {
+      console.warn("Pointer lock error event:", e);
     });
 
     document.addEventListener("mousemove", (e) => {

@@ -487,6 +487,11 @@ export class FPSFootballEngine {
     sound.ambience(true);
   }
 
+  requestLock() {
+    this.soundUnlock();
+    this.controller.requestLock();
+  }
+
   setGameMode(mode: GameMode, roomCode?: string) {
     this.mode = mode;
     this.score = { red: 0, blue: 0 };

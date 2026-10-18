@@ -7,9 +7,15 @@ interface HudProps {
   ui: GameUiState;
   onTogglePixelScale: () => void;
   onOpenMenu: () => void;
+  onRequestLock: () => void;
 }
 
-export const HUD: React.FC<HudProps> = ({ ui, onTogglePixelScale, onOpenMenu }) => {
+export const HUD: React.FC<HudProps> = ({
+  ui,
+  onTogglePixelScale,
+  onOpenMenu,
+  onRequestLock,
+}) => {
   const [muted, setMuted] = React.useState(sound.muted);
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -189,14 +195,23 @@ export const HUD: React.FC<HudProps> = ({ ui, onTogglePixelScale, onOpenMenu }) 
       )}
 
       {/* "CLICK TO LOCK MOUSE" OVERLAY */}
-      {!ui.isLocked && ui.phase === "play" && (
-        <div className="pointer-events-auto absolute inset-0 z-20 grid place-items-center bg-black/60 backdrop-blur-sm cursor-pointer">
-          <div className="border-2 border-white bg-black/90 px-6 py-4 text-center shadow-2xl">
-            <p className="text-sm sm:text-base font-bold uppercase tracking-widest text-white">
-              CLICK SCREEN TO ENTER FPS MODE
+      {!ui.isLocked && (ui.phase === "play" || ui.phase === "ready") && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestLock();
+          }}
+          className="pointer-events-auto absolute inset-0 z-20 grid place-items-center bg-black/60 backdrop-blur-sm cursor-pointer"
+        >
+          <div className="border-2 border-white bg-black/90 px-8 py-5 text-center shadow-2xl transition-transform hover:scale-105 active:scale-95">
+            <p className="text-base sm:text-lg font-black uppercase tracking-widest text-yellow-400 animate-pulse text-retro-glow">
+              ▶ CLICK SCREEN TO ENTER FPS MODE ◀
             </p>
-            <p className="mt-1 text-[11px] text-white/60 uppercase">
-              Move mouse to aim · WASD to move · ESC to release mouse
+            <p className="mt-2 text-[12px] text-white/80 uppercase font-semibold">
+              AIM WITH MOUSE · WASD TO RUN · HOLD LEFT-CLICK TO SHOOT
+            </p>
+            <p className="mt-1 text-[10px] text-white/40 uppercase">
+              (Press ESC at any time to release mouse and open menu)
             </p>
           </div>
         </div>

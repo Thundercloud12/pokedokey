@@ -98,6 +98,7 @@ export default function App() {
         ui={ui}
         onTogglePixelScale={handleTogglePixelScale}
         onOpenMenu={() => setMenuOpen(true)}
+        onRequestLock={() => engineRef.current?.requestLock()}
       />
 
       {/* Goal Celebration Banner */}
@@ -116,6 +117,7 @@ export default function App() {
         ui={ui}
         onSelectMode={handleSelectMode}
         onChangePixelScale={handleChangePixelScale}
+        onRequestLock={() => engineRef.current?.requestLock()}
         onClose={() => {
           engineRef.current?.soundUnlock();
           setMenuOpen(false);

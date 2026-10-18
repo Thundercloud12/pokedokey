@@ -7,6 +7,7 @@ interface LobbyModalProps {
   ui: GameUiState;
   onSelectMode: (mode: GameMode, roomCode?: string) => void;
   onChangePixelScale: (scale: number) => void;
+  onRequestLock?: () => void;
   onClose: () => void;
 }
 
@@ -15,6 +16,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
   ui,
   onSelectMode,
   onChangePixelScale,
+  onRequestLock,
   onClose,
 }) => {
   const [tab, setTab] = useState<"menu" | "host" | "join">("menu");
@@ -40,6 +42,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
     if (joinCode.trim()) {
       onSelectMode("online", joinCode.trim().toUpperCase());
       onClose();
+      onRequestLock?.();
     }
   };
 
@@ -68,6 +71,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
               onClick={() => {
                 onSelectMode("bot");
                 onClose();
+                onRequestLock?.();
               }}
               className="group flex items-center justify-between border border-white/20 bg-white/5 p-3.5 transition hover:border-red-500 hover:bg-white/10 active:scale-98"
             >
@@ -137,6 +141,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
               onClick={() => {
                 onSelectMode("practice");
                 onClose();
+                onRequestLock?.();
               }}
               className="group flex items-center justify-between border border-white/20 bg-white/5 p-3.5 transition hover:border-yellow-500 hover:bg-white/10 active:scale-98"
             >
@@ -195,7 +200,10 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  onClose();
+                  onRequestLock?.();
+                }}
                 className="w-1/2 border-2 border-white bg-white py-2 text-xs font-bold uppercase text-black hover:bg-neutral-200"
               >
                 ENTER ARENA
