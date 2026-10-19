@@ -55,9 +55,19 @@ export class FlashSchema extends Schema {
 }
 
 export class BattleState extends Schema {
-  @type("string") phase: string = "waiting"; // "waiting" | "countdown" | "battle" | "round_end" | "match_over"
+  @type("string") phase: string = "waiting"; // "waiting" | "lobby" | "countdown" | "battle" | "round_end" | "match_over"
   @type("number") round: number = 1;
   @type("number") shake: number = 0;
+
+  // Online Connection & Pre-match Lobby state
+  @type("boolean") p1Connected: boolean = true;
+  @type("boolean") p2Connected: boolean = false;
+  @type("boolean") p1Ready: boolean = false;
+  @type("boolean") p2Ready: boolean = false;
+  @type("string") p1CreatureId: string = "pyrokid";
+  @type("string") p2CreatureId: string = "aquanaut";
+  @type("number") lobbyCountdown: number = -1; // -1 when inactive; 3, 2, 1 when launching
+
   @type(CreatureSchema) left: CreatureSchema = new CreatureSchema();
   @type(CreatureSchema) right: CreatureSchema = new CreatureSchema();
   @type([HitboxSchema]) hitboxes: ArraySchema<HitboxSchema> = new ArraySchema<HitboxSchema>();
@@ -67,7 +77,9 @@ export class BattleState extends Schema {
 }
 
 export function syncSimulationToSchema(sim: SimulationCore, state: BattleState) {
-  state.phase = sim.phase;
+  if (state.phase !== "waiting" && state.phase !== "lobby") {
+    state.phase = sim.phase;
+  }
   state.round = sim.currentRound;
   state.shake = sim.shake;
 

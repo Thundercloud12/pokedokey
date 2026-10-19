@@ -20,6 +20,7 @@ import { Hud } from "../../render/Hud";
 import { SelectScreen } from "../../ui/SelectScreen";
 import { ResultScreen } from "../../ui/ResultScreen";
 import { colyseusNet } from "../../net/ColyseusClient";
+import { OnlineLobbyModal } from "../../ui/OnlineLobbyModal";
 
 const STEP_MS = 1000 / 60;
 
@@ -163,7 +164,7 @@ export function BattlerGame() {
       typeof window !== "undefined" &&
       (window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768)
   );
-  const [screen, setScreen] = useState<"select" | "arena">("select");
+  const [screen, setScreen] = useState<"select" | "lobby" | "arena">("select");
   const screenRef = useRef(screen);
   screenRef.current = screen;
 
@@ -181,6 +182,20 @@ export function BattlerGame() {
   const [, setIsHost] = useState(false);
   const [peerConnected, setPeerConnected] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Online Connecting / Button Feedback states
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingAction, setConnectingAction] = useState<"create" | "join" | "quick" | null>(null);
+
+  // Online Lobby & Connection Live state from Colyseus
+  const [onlineP1CreatureId, setOnlineP1CreatureId] = useState("pyrokid");
+  const [onlineP2CreatureId, setOnlineP2CreatureId] = useState("aquanaut");
+  const [onlineP1Ready, setOnlineP1Ready] = useState(false);
+  const [onlineP2Ready, setOnlineP2Ready] = useState(false);
+  const [onlineP1Connected, setOnlineP1Connected] = useState(true);
+  const [onlineP2Connected, setOnlineP2Connected] = useState(false);
+  const [onlineLobbyCountdown, setOnlineLobbyCountdown] = useState(-1);
+  const [, setOnlinePhase] = useState<string>("waiting");
 
   const p1CreatureRef = useRef(p1Creature);
   p1CreatureRef.current = p1Creature;
@@ -201,12 +216,37 @@ export function BattlerGame() {
       setRoomCode(rId);
     };
 
-    colyseusNet.onDisconnect = () => {
+    colyseusNet.onRoomDisbanded = (reason) => {
+      alert(reason || "Room was disbanded.");
       setPeerConnected(false);
+      setScreen("select");
+      setOnlineTab("menu");
+      setOnlinePhase("waiting");
+    };
+
+    colyseusNet.onDisconnect = (reason) => {
+      setPeerConnected(false);
+      if (screenRef.current === "lobby") {
+        alert(reason || "Disconnected from lobby.");
+        setScreen("select");
+        setOnlineTab("menu");
+        setOnlinePhase("waiting");
+      }
     };
 
     colyseusNet.onStateUpdate = (snap, rawState) => {
       remoteSnapshotRef.current = snap;
+
+      if (rawState.phase) {
+        setOnlinePhase(rawState.phase);
+      }
+      if (typeof rawState.p1Connected === "boolean") setOnlineP1Connected(rawState.p1Connected);
+      if (typeof rawState.p2Connected === "boolean") setOnlineP2Connected(rawState.p2Connected);
+      if (typeof rawState.p1Ready === "boolean") setOnlineP1Ready(rawState.p1Ready);
+      if (typeof rawState.p2Ready === "boolean") setOnlineP2Ready(rawState.p2Ready);
+      if (rawState.p1CreatureId) setOnlineP1CreatureId(rawState.p1CreatureId);
+      if (rawState.p2CreatureId) setOnlineP2CreatureId(rawState.p2CreatureId);
+      if (typeof rawState.lobbyCountdown === "number") setOnlineLobbyCountdown(rawState.lobbyCountdown);
 
       const isLeft = colyseusNet.mySide === "left";
       const oppId = isLeft ? rawState.right.creatureId : rawState.left.creatureId;
@@ -224,11 +264,20 @@ export function BattlerGame() {
         setPeerConnected(true);
       }
 
-      if (screenRef.current !== "arena" && (rawState.phase === "countdown" || rawState.phase === "battle")) {
-        sound.unlock();
-        setSnapshot(snap);
-        setScreen("arena");
-        sound.ambience(true);
+      // Screen state transitions based on authoritative Colyseus phase
+      if (rawState.phase === "lobby") {
+        if (screenRef.current !== "lobby") {
+          setScreen("lobby");
+        }
+      } else if (rawState.phase === "countdown" || rawState.phase === "battle") {
+        if (screenRef.current !== "arena") {
+          sound.unlock();
+          setSnapshot(snap);
+          setScreen("arena");
+          sound.ambience(true);
+        } else {
+          setSnapshot(snap);
+        }
       } else if (screenRef.current === "arena") {
         setSnapshot(snap);
         if (snap.phase === "match_over" && (snap.left.roundsWon >= 2 || snap.right.roundsWon >= 2)) {
@@ -409,12 +458,17 @@ export function BattlerGame() {
   const handleHostOnline = async () => {
     setIsHost(true);
     setMode("online");
+    setIsConnecting(true);
+    setConnectingAction("create");
     try {
       const code = await colyseusNet.hostRoom(p1Creature.id);
       setRoomCode(code);
       setOnlineTab("host");
     } catch (err: any) {
       alert("Colyseus Connection Error: " + (err?.message || err));
+    } finally {
+      setIsConnecting(false);
+      setConnectingAction(null);
     }
   };
 
@@ -422,23 +476,33 @@ export function BattlerGame() {
     if (!joinCodeInput.trim()) return;
     setIsHost(false);
     setMode("online");
+    setIsConnecting(true);
+    setConnectingAction("join");
     try {
       const code = joinCodeInput.trim();
       setRoomCode(code);
       await colyseusNet.joinRoom(code, p1Creature.id);
     } catch (err: any) {
       alert("Failed to join room: " + (err?.message || err));
+    } finally {
+      setIsConnecting(false);
+      setConnectingAction(null);
     }
   };
 
   const handleQuickMatch = async () => {
     setMode("online");
+    setIsConnecting(true);
+    setConnectingAction("quick");
     try {
       const code = await colyseusNet.quickMatch(p1Creature.id);
       setRoomCode(code);
       setOnlineTab("host");
     } catch (err: any) {
       alert("Colyseus Quick Match Error: " + (err?.message || err));
+    } finally {
+      setIsConnecting(false);
+      setConnectingAction(null);
     }
   };
 
@@ -460,6 +524,14 @@ export function BattlerGame() {
     setScreen("select");
   };
 
+  const effectiveLeftCreature = mode === "online"
+    ? CREATURE_MAP[onlineP1CreatureId] || p1Creature
+    : p1Creature;
+
+  const effectiveRightCreature = mode === "online"
+    ? CREATURE_MAP[onlineP2CreatureId] || p2Creature
+    : p2Creature;
+
   const isTwoPlayer = mode === "local2p" || mode === "online";
   const winnerSide =
     snapshot && snapshot.left.roundsWon >= 2
@@ -467,14 +539,14 @@ export function BattlerGame() {
       : snapshot && snapshot.right.roundsWon >= 2
       ? "right"
       : "left";
-  const winnerCreature = winnerSide === "left" ? p1Creature : p2Creature;
-  const loserCreature = winnerSide === "left" ? p2Creature : p1Creature;
+  const winnerCreature = winnerSide === "left" ? effectiveLeftCreature : effectiveRightCreature;
+  const loserCreature = winnerSide === "left" ? effectiveRightCreature : effectiveLeftCreature;
 
   // Construct full creature state representation for HUD
   const hudLeftState: CreatureState | null = snapshot
     ? {
         ...snapshot.left,
-        creature: p1Creature,
+        creature: effectiveLeftCreature,
         side: "left",
       }
     : null;
@@ -482,10 +554,13 @@ export function BattlerGame() {
   const hudRightState: CreatureState | null = snapshot
     ? {
         ...snapshot.right,
-        creature: p2Creature,
+        creature: effectiveRightCreature,
         side: "right",
       }
     : null;
+
+  const isOnlineRightPlayer = mode === "online" && colyseusNet.mySide === "right";
+  const myTouchCreature = isOnlineRightPlayer ? effectiveRightCreature : effectiveLeftCreature;
 
   return (
     <div className="relative flex h-screen w-screen flex-col items-center justify-center bg-[#05070e] p-2 font-mono select-none sm:p-4">
@@ -519,6 +594,31 @@ export function BattlerGame() {
                 navigator.clipboard.writeText(roomCode);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
+              }}
+              isConnecting={isConnecting}
+              connectingAction={connectingAction}
+            />
+          </div>
+        ) : screen === "lobby" ? (
+          <div className="aspect-[2/1] min-h-[500px] w-full">
+            <OnlineLobbyModal
+              roomId={roomCode}
+              mySide={colyseusNet.mySide}
+              p1CreatureId={onlineP1CreatureId}
+              p2CreatureId={onlineP2CreatureId}
+              p1Ready={onlineP1Ready}
+              p2Ready={onlineP2Ready}
+              p1Connected={onlineP1Connected}
+              p2Connected={onlineP2Connected}
+              lobbyCountdown={onlineLobbyCountdown}
+              onSelectCreature={(creatureId) => colyseusNet.selectCreature(creatureId)}
+              onToggleReady={() => colyseusNet.toggleReady()}
+              onLeave={() => {
+                colyseusNet.leave();
+                setScreen("select");
+                setOnlineTab("menu");
+                setOnlinePhase("waiting");
+                setPeerConnected(false);
               }}
             />
           </div>
@@ -566,8 +666,8 @@ export function BattlerGame() {
               sim={sim}
               botBrain={botBrain}
               mode={mode}
-              p1Creature={p1Creature}
-              p2Creature={p2Creature}
+              p1Creature={effectiveLeftCreature}
+              p2Creature={effectiveRightCreature}
               getP1Controls={getP1Controls}
               getP2Controls={getP2Controls}
               onSnapshot={setSnapshot}
@@ -585,6 +685,9 @@ export function BattlerGame() {
                 currentRound={snapshot?.round || 1}
                 isTwoPlayer={isTwoPlayer}
                 hideAbilityBar={touchEnabled}
+                isOnline={mode === "online"}
+                p1Connected={onlineP1Connected}
+                p2Connected={onlineP2Connected}
               />
             )}
 
@@ -630,11 +733,12 @@ export function BattlerGame() {
 
                 {/* 4 Ability Slots with Live Cooldowns */}
                 <div className="grid grid-cols-2 gap-1.5 sm:flex sm:gap-2">
-                  {p1Creature.moves.map((mId, slot) => {
+                  {myTouchCreature.moves.map((mId, slot) => {
                     const move = MOVES[mId];
                     if (!move) return null;
                     const meta = TYPE_META[move.type];
-                    const cd = snapshot.left.cooldowns[slot];
+                    const activeCreatureState = isOnlineRightPlayer ? snapshot.right : snapshot.left;
+                    const cd = activeCreatureState.cooldowns[slot];
                     const cdPct = cd > 0 ? Math.min(100, (cd / move.cooldownMs) * 100) : 0;
 
                     return (

@@ -7,6 +7,9 @@ interface HudProps {
   currentRound: number;
   isTwoPlayer: boolean;
   hideAbilityBar?: boolean;
+  isOnline?: boolean;
+  p1Connected?: boolean;
+  p2Connected?: boolean;
 }
 
 const P1_KEYS = ["J", "K", "L", "I"];
@@ -18,6 +21,9 @@ export const Hud: React.FC<HudProps> = ({
   currentRound,
   isTwoPlayer,
   hideAbilityBar = false,
+  isOnline = false,
+  p1Connected = true,
+  p2Connected = true,
 }) => {
   const p1HpPercent = Math.max(0, Math.min(100, (leftState.hp / leftState.maxHp) * 100));
   const p2HpPercent = Math.max(0, Math.min(100, (rightState.hp / rightState.maxHp) * 100));
@@ -161,7 +167,7 @@ export const Hud: React.FC<HudProps> = ({
           </div>
         </div>
 
-        {/* Center Round Indicator */}
+        {/* Center Round Indicator & Online Status */}
         <div className="col-span-2 flex flex-col items-center justify-center pt-1">
           <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 drop-shadow">
             ROUND {currentRound}
@@ -169,7 +175,47 @@ export const Hud: React.FC<HudProps> = ({
           <span className="text-[8px] font-semibold text-white/60 tracking-wider">
             BEST OF 3
           </span>
+
+          {/* Online Connection Status Indicators */}
+          {isOnline && (
+            <div className="flex items-center justify-center gap-1.5 mt-1">
+              <div
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase ${
+                  p1Connected
+                    ? "bg-emerald-950/80 border border-emerald-500/60 text-emerald-300"
+                    : "bg-rose-950/80 border border-rose-500/60 text-rose-300 animate-pulse"
+                }`}
+                title={p1Connected ? "Player 1 Connected" : "Player 1 Disconnected (20s Grace)"}
+              >
+                <span className={`size-1.5 rounded-full ${p1Connected ? "bg-emerald-400" : "bg-rose-500"}`} />
+                <span>P1</span>
+              </div>
+
+              <div
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase ${
+                  p2Connected
+                    ? "bg-emerald-950/80 border border-emerald-500/60 text-emerald-300"
+                    : "bg-rose-950/80 border border-rose-500/60 text-rose-300 animate-pulse"
+                }`}
+                title={p2Connected ? "Player 2 Connected" : "Player 2 Disconnected (20s Grace)"}
+              >
+                <span className={`size-1.5 rounded-full ${p2Connected ? "bg-emerald-400" : "bg-rose-500"}`} />
+                <span>P2</span>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Mid-Match Disconnect Warning Banner */}
+        {isOnline && (!p1Connected || !p2Connected) && (
+          <div className="pointer-events-none absolute top-14 inset-x-0 flex justify-center z-30">
+            <div className="bg-rose-600/95 border-2 border-white px-3 py-1 rounded shadow-xl animate-bounce">
+              <span className="font-mono text-[10px] sm:text-xs font-bold text-white uppercase tracking-wider">
+                ⚠ OPPONENT DISCONNECTED — 20s RECONNECT GRACE WINDOW ACTIVE
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* P2 (Right) Info & Health */}
         <div className="col-span-5 flex flex-col items-end gap-1">

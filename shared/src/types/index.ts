@@ -58,6 +58,7 @@ export interface Creature {
 
 export type BattlePhase =
   | "waiting"
+  | "lobby"
   | "ready"
   | "countdown"
   | "battle"

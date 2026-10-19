@@ -58,6 +58,13 @@ export interface ColyseusBattleState {
   phase: string;
   round: number;
   shake: number;
+  p1Connected: boolean;
+  p2Connected: boolean;
+  p1Ready: boolean;
+  p2Ready: boolean;
+  p1CreatureId: string;
+  p2CreatureId: string;
+  lobbyCountdown: number;
   left: ColyseusCreatureState;
   right: ColyseusCreatureState;
   hitboxes: ColyseusHitbox[];
@@ -72,11 +79,13 @@ export class ColyseusClientManager {
   public mySide: "left" | "right" = "left";
   public roomId: string = "";
   public serverUrl: string;
+  public reconnectionToken: string = "";
 
   public onAssignedSide?: (side: "left" | "right", roomId: string) => void;
   public onStateUpdate?: (snap: WorldSnapshot, rawState: ColyseusBattleState) => void;
   public onMatchStart?: () => void;
   public onDisconnect?: (reason: string) => void;
+  public onRoomDisbanded?: (reason: string) => void;
 
   constructor() {
     this.serverUrl =
@@ -84,6 +93,9 @@ export class ColyseusClientManager {
       import.meta.env.VITE_SERVER_URL ||
       this.getDefaultServerUrl();
     this.client = new Client(this.serverUrl);
+    if (typeof sessionStorage !== "undefined") {
+      this.reconnectionToken = sessionStorage.getItem("colyseus_reconnect_token") || "";
+    }
   }
 
   private getDefaultServerUrl(): string {
@@ -106,6 +118,7 @@ export class ColyseusClientManager {
     this.room = await this.client.create("battle_room", { creatureId });
     this.roomId = this.room.id;
     this.mySide = "left";
+    this.saveReconnectionToken();
     this.setupRoomListeners(this.room);
     return this.room.id;
   }
@@ -115,6 +128,7 @@ export class ColyseusClientManager {
     this.room = await this.client.joinById(roomId.trim(), { creatureId });
     this.roomId = this.room.id;
     this.mySide = "right";
+    this.saveReconnectionToken();
     this.setupRoomListeners(this.room);
   }
 
@@ -122,8 +136,31 @@ export class ColyseusClientManager {
     this.leave();
     this.room = await this.client.joinOrCreate("battle_room", { creatureId });
     this.roomId = this.room.id;
+    this.saveReconnectionToken();
     this.setupRoomListeners(this.room);
     return this.room.id;
+  }
+
+  async reconnect(token?: string): Promise<void> {
+    const t = token || this.reconnectionToken;
+    if (!t) throw new Error("No reconnection token available");
+    this.leave();
+    this.room = await this.client.reconnect(t);
+    this.roomId = this.room.id;
+    this.saveReconnectionToken();
+    this.setupRoomListeners(this.room);
+  }
+
+  selectCreature(creatureId: string) {
+    if (this.room) {
+      this.room.send("select_creature", { creatureId });
+    }
+  }
+
+  toggleReady() {
+    if (this.room) {
+      this.room.send("toggle_ready");
+    }
   }
 
   sendControls(ctl: BattleControls) {
@@ -138,6 +175,22 @@ export class ColyseusClientManager {
     }
   }
 
+  private saveReconnectionToken() {
+    if (this.room && this.room.reconnectionToken) {
+      this.reconnectionToken = this.room.reconnectionToken;
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem("colyseus_reconnect_token", this.room.reconnectionToken);
+      }
+    }
+  }
+
+  private clearReconnectionToken() {
+    this.reconnectionToken = "";
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("colyseus_reconnect_token");
+    }
+  }
+
   leave() {
     if (this.room) {
       try {
@@ -147,6 +200,7 @@ export class ColyseusClientManager {
       }
       this.room = null;
       this.roomId = "";
+      this.clearReconnectionToken();
     }
   }
 
@@ -155,6 +209,10 @@ export class ColyseusClientManager {
       this.mySide = data.side;
       this.roomId = data.roomId;
       this.onAssignedSide?.(data.side, data.roomId);
+    });
+
+    room.onMessage("room_disbanded", (data: { reason?: string }) => {
+      this.onRoomDisbanded?.(data?.reason || "Room was disbanded by host.");
     });
 
     room.onStateChange((state: ColyseusBattleState) => {

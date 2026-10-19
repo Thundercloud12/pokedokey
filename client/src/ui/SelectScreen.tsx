@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bot, Users, Globe, Volume2, VolumeX, Swords, Shield, Zap, Wind, HelpCircle } from "lucide-react";
+import { Bot, Users, Globe, Volume2, VolumeX, Swords, Shield, Zap, Wind, HelpCircle, Loader2 } from "lucide-react";
 import { CREATURES, type Creature, MOVES, TYPE_META, type PlayMode } from "@game/shared";
 import { drawCreature } from "../render/CreatureSprite";
 import { sound } from "../audio/Sound";
@@ -30,6 +30,8 @@ interface SelectScreenProps {
   peerConnected: boolean;
   copied: boolean;
   onCopyRoomCode: () => void;
+  isConnecting?: boolean;
+  connectingAction?: "create" | "join" | "quick" | null;
 }
 
 const CreatureCanvas: React.FC<{ creature: Creature; isHovered?: boolean }> = ({
@@ -108,6 +110,8 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
   peerConnected,
   copied,
   onCopyRoomCode,
+  isConnecting = false,
+  connectingAction = null,
 }) => {
   const [activePicker, setActivePicker] = useState<"p1" | "p2">("p1");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -434,23 +438,46 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                   <div className="flex flex-col gap-2">
                     <button
                       type="button"
+                      disabled={isConnecting}
                       onClick={onQuickMatch || onHostOnline}
-                      className="border border-emerald-400 bg-emerald-500 py-2 text-center text-xs font-bold text-black uppercase hover:bg-emerald-400 transition shadow-lg"
+                      className={`border border-emerald-400 bg-emerald-500 py-2 text-center text-xs font-bold text-black uppercase transition shadow-lg flex items-center justify-center gap-1.5 ${
+                        isConnecting ? "opacity-60 cursor-not-allowed" : "hover:bg-emerald-400"
+                      }`}
                     >
-                      ⚡ QUICK MATCH (MATCHMAKING)
+                      {connectingAction === "quick" ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          <span>SEARCHING MATCH...</span>
+                        </>
+                      ) : (
+                        <span>⚡ QUICK MATCH (MATCHMAKING)</span>
+                      )}
                     </button>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
+                        disabled={isConnecting}
                         onClick={onHostOnline}
-                        className="border border-white bg-white/90 py-1.5 text-center text-xs font-bold text-black uppercase hover:bg-white transition"
+                        className={`border border-white bg-white/90 py-1.5 text-center text-xs font-bold text-black uppercase transition flex items-center justify-center gap-1.5 ${
+                          isConnecting ? "opacity-60 cursor-not-allowed" : "hover:bg-white"
+                        }`}
                       >
-                        Create Room
+                        {connectingAction === "create" ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>CREATING...</span>
+                          </>
+                        ) : (
+                          <span>Create Room</span>
+                        )}
                       </button>
                       <button
                         type="button"
+                        disabled={isConnecting}
                         onClick={() => setOnlineTab("join")}
-                        className="border border-white/60 bg-black/60 py-1.5 text-center text-xs font-bold text-white uppercase hover:bg-white/10 transition"
+                        className={`border border-white/60 bg-black/60 py-1.5 text-center text-xs font-bold text-white uppercase transition flex items-center justify-center gap-1.5 ${
+                          isConnecting ? "opacity-60 cursor-not-allowed" : "hover:bg-white/10"
+                        }`}
                       >
                         Join Room
                       </button>
@@ -487,8 +514,8 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                     </div>
                     <span className="text-[9px] text-white/60 uppercase">
                       {peerConnected
-                        ? "⚡ Challenger connected! Launching..."
-                        : "Share room code with your friend. Waiting to connect..."}
+                        ? "⚡ Challenger connected! Launching lobby..."
+                        : "Share room code with your friend. Waiting for challenger to join..."}
                     </span>
                     <button
                       type="button"
@@ -505,20 +532,33 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                         type="text"
                         placeholder="PASTE ROOM ID..."
                         value={joinCodeInput}
+                        disabled={isConnecting}
                         onChange={(e) => setJoinCodeInput(e.target.value)}
-                        className="w-full border border-white/40 bg-black/60 px-2 py-1 text-xs text-white font-mono"
+                        className="w-full border border-white/40 bg-black/60 px-2 py-1 text-xs text-white font-mono disabled:opacity-50"
                       />
                       <button
                         type="button"
+                        disabled={isConnecting || !joinCodeInput.trim()}
                         onClick={onJoinOnline}
-                        className="border border-white bg-white px-3 py-1 text-xs font-bold text-black uppercase hover:bg-white/90"
+                        className={`border border-white bg-white px-3 py-1 text-xs font-bold text-black uppercase transition flex items-center justify-center gap-1 ${
+                          isConnecting || !joinCodeInput.trim()
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-white/90"
+                        }`}
                       >
-                        JOIN
+                        {connectingAction === "join" ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" />
+                            <span>JOINING...</span>
+                          </>
+                        ) : (
+                          <span>JOIN</span>
+                        )}
                       </button>
                     </div>
                     {peerConnected && (
                       <span className="text-[9px] text-emerald-400 font-bold uppercase text-center">
-                        ⚡ Connected to Host! Launching match...
+                        ⚡ Connected to Host! Launching lobby...
                       </span>
                     )}
                     <button
