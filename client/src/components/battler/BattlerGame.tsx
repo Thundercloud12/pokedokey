@@ -310,39 +310,59 @@ export function BattlerGame() {
       const k = e.key.toLowerCase();
       let hit = false;
 
-      // Player 1 controls (WASD or Arrow Keys for movement)
-      if (k === "a" || (mode !== "local2p" && k === "arrowleft")) {
-        kbP1.current.left = down;
-        hit = true;
-      } else if (k === "d" || (mode !== "local2p" && k === "arrowright")) {
-        kbP1.current.right = down;
-        hit = true;
-      } else if (k === "w" || (mode !== "local2p" && k === "arrowup")) {
-        kbP1.current.jump = down;
-        hit = true;
-      } else if (k === " ") {
-        kbP1.current.move1 = down;
-        hit = true;
-      } else if (k === "f") {
-        kbP1.current.move2 = down;
-        hit = true;
-      } else if (k === "q") {
-        kbP1.current.move3 = down;
-        hit = true;
-      } else if (k === "e") {
-        kbP1.current.move4 = down;
-        hit = true;
-      }
-
-      // Player 2 controls in Local 2-Player mode (Arrows + Enter/L/K/O)
+      // In Local 2-Player mode, both players share the keyboard:
+      // P1: Left side (WASD run, W/Space jump, F/G/R/T abilities)
+      // P2: Right side (Arrows run/jump, J/K/L/I abilities)
       if (mode === "local2p") {
+        // P1 Movement (WASD + Space)
+        if (k === "a") { kbP1.current.left = down; hit = true; }
+        else if (k === "d") { kbP1.current.right = down; hit = true; }
+        else if (k === "w" || k === " ") { kbP1.current.jump = down; hit = true; }
+        // P1 Attacks (F, G, R, T or Z, X, C, V)
+        else if (k === "f" || k === "z") { kbP1.current.move1 = down; hit = true; }
+        else if (k === "g" || k === "x") { kbP1.current.move2 = down; hit = true; }
+        else if (k === "r" || k === "c") { kbP1.current.move3 = down; hit = true; }
+        else if (k === "t" || k === "v") { kbP1.current.move4 = down; hit = true; }
+
+        // P2 Movement (Arrow keys)
         if (k === "arrowleft") { kbP2.current.left = down; hit = true; }
         else if (k === "arrowright") { kbP2.current.right = down; hit = true; }
         else if (k === "arrowup") { kbP2.current.jump = down; hit = true; }
-        else if (k === "enter") { kbP2.current.move1 = down; hit = true; }
-        else if (k === "l") { kbP2.current.move2 = down; hit = true; }
-        else if (k === "k") { kbP2.current.move3 = down; hit = true; }
-        else if (k === "o") { kbP2.current.move4 = down; hit = true; }
+        // P2 Attacks (J, K, L, I or Enter)
+        else if (k === "j" || k === "enter") { kbP2.current.move1 = down; hit = true; }
+        else if (k === "k") { kbP2.current.move2 = down; hit = true; }
+        else if (k === "l") { kbP2.current.move3 = down; hit = true; }
+        else if (k === "i" || k === "u" || k === "o") { kbP2.current.move4 = down; hit = true; }
+
+        return hit;
+      }
+
+      // Solo and Online mode: Option A (Modern Two-Handed Brawler Layout)
+      // Left Hand: Movement (A/D run, Space/W jump, or Arrow keys)
+      if (k === "a" || k === "arrowleft") {
+        kbP1.current.left = down;
+        hit = true;
+      } else if (k === "d" || k === "arrowright") {
+        kbP1.current.right = down;
+        hit = true;
+      } else if (k === "w" || k === " " || k === "arrowup") {
+        kbP1.current.jump = down;
+        hit = true;
+      }
+
+      // Right Hand: Combat Actions (Option A: J, K, L, I/U)
+      else if (k === "j" || k === "1" || k === "z") {
+        kbP1.current.move1 = down;
+        hit = true;
+      } else if (k === "k" || k === "2" || k === "x") {
+        kbP1.current.move2 = down;
+        hit = true;
+      } else if (k === "l" || k === "3" || k === "c") {
+        kbP1.current.move3 = down;
+        hit = true;
+      } else if (k === "i" || k === "u" || k === "4" || k === "v") {
+        kbP1.current.move4 = down;
+        hit = true;
       }
 
       return hit;

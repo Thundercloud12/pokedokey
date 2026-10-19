@@ -549,11 +549,11 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
       <div className="flex flex-wrap items-center justify-between border-t border-white/10 pt-2 text-[10px] font-mono text-white/60">
         <div className="flex items-center gap-3">
           <span>
-            <strong className="text-white">P1:</strong> A/D Run • W Jump • [SPACE/F/Q/E] Moves
+            <strong className="text-white">P1:</strong> A/D Run • Space/W Jump • [J/K/L/I] Moves
           </span>
           {mode === "local2p" && (
             <span>
-              <strong className="text-white">P2:</strong> ←/→ Run • ↑ Jump • [ENTER/L/K/O] Moves
+              <strong className="text-white">P2:</strong> ←/→ Run • ↑ Jump • [J/K/L/I] Moves
             </span>
           )}
         </div>

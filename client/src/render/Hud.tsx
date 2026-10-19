@@ -9,8 +9,8 @@ interface HudProps {
   hideAbilityBar?: boolean;
 }
 
-const P1_KEYS = ["SPACE", "F", "Q", "E"];
-const P2_KEYS = ["ENTER", "L", "K", "O"];
+const P1_KEYS = ["J", "K", "L", "I"];
+const P2_KEYS = ["J", "K", "L", "I"];
 
 export const Hud: React.FC<HudProps> = ({
   leftState,

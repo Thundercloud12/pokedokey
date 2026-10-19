@@ -272,16 +272,16 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose })
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
               <div className="bg-white/5 p-1.5 rounded">
-                <span className="text-amber-300 font-bold block">P1 / SOLO:</span>
-                <span>Run: <strong>A / D</strong></span><br />
-                <span>Jump: <strong>W</strong></span><br />
-                <span>Abilities: <strong>Space, F, Q, E</strong></span>
+                <span className="text-amber-300 font-bold block">P1 / SOLO / ONLINE:</span>
+                <span>Run: <strong>A / D (or ← / →)</strong></span><br />
+                <span>Jump: <strong>Space or W (or ↑)</strong></span><br />
+                <span>Abilities: <strong>J, K, L, I</strong></span>
               </div>
               <div className="bg-white/5 p-1.5 rounded">
                 <span className="text-blue-300 font-bold block">P2 (LOCAL 2P):</span>
                 <span>Run: <strong>← / →</strong></span><br />
                 <span>Jump: <strong>↑</strong></span><br />
-                <span>Abilities: <strong>Enter, L, K, O</strong></span>
+                <span>Abilities: <strong>J, K, L, I</strong></span>
               </div>
             </div>
           </div>
