@@ -1,7 +1,12 @@
 import { Room, type Client, type Delayed } from "@colyseus/core";
-import { BattleState } from "./schema/BattleState.js";
-import { HeadlessPhysics, type BattleControls, emptyBattleControls } from "../engine/HeadlessPhysics.js";
-import { CREATURE_MAP, CREATURES } from "../data/creatures.js";
+import { BattleState, syncSimulationToSchema } from "./schema/BattleState.js";
+import {
+  SimulationCore,
+  emptyBattleControls,
+  type BattleControls,
+  CREATURE_MAP,
+  CREATURES,
+} from "@game/shared";
 
 interface JoinOptions {
   creatureId?: string;
@@ -10,7 +15,7 @@ interface JoinOptions {
 export class BattleRoom extends Room<BattleState> {
   maxClients = 2;
 
-  private physics!: HeadlessPhysics;
+  private sim!: SimulationCore;
   private p1Client?: Client;
   private p2Client?: Client;
   private p1CreatureId = "pyrokid";
@@ -26,8 +31,8 @@ export class BattleRoom extends Room<BattleState> {
     const c1 = CREATURE_MAP[options.creatureId || "pyrokid"] || CREATURES[0];
     const c2 = CREATURES[1];
 
-    this.physics = new HeadlessPhysics(320, 170, c1, c2);
-    this.physics.syncToSchema(this.state);
+    this.sim = new SimulationCore(320, 170, c1, c2);
+    syncSimulationToSchema(this.sim, this.state);
 
     // Auto-dispose idle room if challenger doesn't join within 3 minutes
     this.waitingTimer = this.clock.setTimeout(() => {
@@ -40,9 +45,9 @@ export class BattleRoom extends Room<BattleState> {
     // Client input handler
     this.onMessage("input", (client: Client, controls: BattleControls) => {
       if (this.p1Client && client.sessionId === this.p1Client.sessionId) {
-        this.physics.p1Controls = controls;
+        this.sim.p1Controls = controls;
       } else if (this.p2Client && client.sessionId === this.p2Client.sessionId) {
-        this.physics.p2Controls = controls;
+        this.sim.p2Controls = controls;
       }
     });
 
@@ -53,7 +58,7 @@ export class BattleRoom extends Room<BattleState> {
           this.matchOverTimer.clear();
           this.matchOverTimer = undefined;
         }
-        this.physics.startMatch();
+        this.sim.startMatch();
       }
     });
 
@@ -89,9 +94,9 @@ export class BattleRoom extends Room<BattleState> {
       // Both players connected! Set chosen creatures and launch match
       const c1 = CREATURE_MAP[this.p1CreatureId] || CREATURES[0];
       const c2 = CREATURE_MAP[this.p2CreatureId] || CREATURES[1];
-      this.physics.setCreatures(c1, c2);
-      this.physics.startMatch();
-      this.physics.syncToSchema(this.state);
+      this.sim.setCreatures(c1, c2);
+      this.sim.startMatch();
+      syncSimulationToSchema(this.sim, this.state);
     }
   }
 
@@ -103,22 +108,22 @@ export class BattleRoom extends Room<BattleState> {
     // Award victory to remaining player on premature disconnect
     if (this.p1Client && client.sessionId === this.p1Client.sessionId) {
       this.p1Client = undefined;
-      this.physics.p1Controls = emptyBattleControls();
+      this.sim.p1Controls = emptyBattleControls();
       if (this.state.phase === "battle" || this.state.phase === "countdown") {
         this.state.flash.text = "PLAYER 1 DISCONNECTED";
         this.state.flash.color = "#ef4444";
         this.state.flash.t = 120;
-        this.physics.rightState.roundsWon = 2;
+        this.sim.rightState.roundsWon = 2;
         this.state.phase = "match_over";
       }
     } else if (this.p2Client && client.sessionId === this.p2Client.sessionId) {
       this.p2Client = undefined;
-      this.physics.p2Controls = emptyBattleControls();
+      this.sim.p2Controls = emptyBattleControls();
       if (this.state.phase === "battle" || this.state.phase === "countdown") {
         this.state.flash.text = "PLAYER 2 DISCONNECTED";
         this.state.flash.color = "#ef4444";
         this.state.flash.t = 120;
-        this.physics.leftState.roundsWon = 2;
+        this.sim.leftState.roundsWon = 2;
         this.state.phase = "match_over";
       }
     }
@@ -135,8 +140,8 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   private updatePhysics() {
-    this.physics.step();
-    this.physics.syncToSchema(this.state);
+    this.sim.step();
+    syncSimulationToSchema(this.sim, this.state);
 
     // If match ended, set a 2-minute post-match idle cleanup timer
     if (this.state.phase === "match_over" && !this.matchOverTimer) {

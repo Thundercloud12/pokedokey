@@ -1,5 +1,5 @@
 {
-  "name": "creature-arena-server",
+  "name": "@game/server",
   "version": "1.0.0",
   "private": true,
   "description": "Colyseus authoritative game server for 2D Creature Arena Battler",
@@ -14,6 +14,7 @@
     "@colyseus/core": "^0.15.57",
     "@colyseus/schema": "^2.0.36",
     "@colyseus/ws-transport": "^0.15.3",
+    "@game/shared": "*",
     "colyseus": "^0.15.57",
     "cors": "^2.8.5",
     "express": "^4.21.2"

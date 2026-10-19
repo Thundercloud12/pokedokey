@@ -1,44 +1,21 @@
 {
-  "name": "football-gamer",
+  "name": "football-gamer-monorepo",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
   "scripts": {
-    "dev": "vite",
-    "dev:server": "npm --prefix server run dev",
-    "server": "npm --prefix server start",
-    "build:server": "npm --prefix server run build",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@colyseus/schema": "^2.0.37",
-    "@tailwindcss/vite": "^4.3.3",
-    "@trystero-p2p/torrent": "^0.26.0",
-    "cannon-es": "^0.20.0",
-    "canvas-confetti": "^1.9.4",
-    "colyseus.js": "^0.15.28",
-    "framer-motion": "^14.3.0",
-    "lucide-react": "^1.59.0",
-    "peerjs": "^1.5.5",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "three": "^0.186.1",
-    "trystero": "^0.26.0"
-  },
-  "devDependencies": {
-    "@types/canvas-confetti": "^1.9.0",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@types/three": "^0.186.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "autoprefixer": "^10.6.1",
-    "oxlint": "^1.81.0",
-    "postcss": "^8.5.30",
-    "tailwindcss": "^4.3.3",
-    "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "dev": "npm --workspace=@game/client run dev",
+    "dev:server": "npm --workspace=@game/server run dev",
+    "build:shared": "npm --workspace=@game/shared run build",
+    "build:client": "npm --workspace=@game/client run build",
+    "build:server": "npm --workspace=@game/server run build",
+    "build": "npm run build:shared && npm run build:client",
+    "start": "npm --workspace=@game/client run preview",
+    "server": "npm --workspace=@game/server start",
+    "start:server": "npm --workspace=@game/server start",
+    "preview": "npm --workspace=@game/client run preview"
   }
 }
