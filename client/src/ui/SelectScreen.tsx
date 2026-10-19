@@ -32,6 +32,7 @@ interface SelectScreenProps {
   onCopyRoomCode: () => void;
   isConnecting?: boolean;
   connectingAction?: "create" | "join" | "quick" | null;
+  onCancelOnline?: () => void;
 }
 
 const CreatureCanvas: React.FC<{ creature: Creature; isHovered?: boolean }> = ({
@@ -112,6 +113,7 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
   onCopyRoomCode,
   isConnecting = false,
   connectingAction = null,
+  onCancelOnline,
 }) => {
   const [activePicker, setActivePicker] = useState<"p1" | "p2">("p1");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -519,7 +521,10 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => setOnlineTab("menu")}
+                      onClick={() => {
+                        onCancelOnline?.();
+                        setOnlineTab("menu");
+                      }}
                       className="text-[9px] text-white/40 hover:text-white underline mt-1"
                     >
                       ← Back to menu
@@ -563,7 +568,10 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                     )}
                     <button
                       type="button"
-                      onClick={() => setOnlineTab("menu")}
+                      onClick={() => {
+                        onCancelOnline?.();
+                        setOnlineTab("menu");
+                      }}
                       className="text-[9px] text-white/40 hover:text-white underline self-center"
                     >
                       ← Back to menu

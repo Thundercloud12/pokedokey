@@ -209,6 +209,21 @@ export function BattlerGame() {
   const [botBrain] = useState<BotBrain>(() => new BotBrain());
   const [snapshot, setSnapshot] = useState<WorldSnapshot | null>(null);
 
+  // Centralized cleanup for online room/lobby state
+  const resetOnlineSession = useCallback(() => {
+    colyseusNet.leave();
+    setRoomCode("");
+    setJoinCodeInput("");
+    setOnlineTab("menu");
+    setPeerConnected(false);
+    setOnlinePhase("waiting");
+    setOnlineP1Ready(false);
+    setOnlineP2Ready(false);
+    setOnlineLobbyCountdown(-1);
+    setIsConnecting(false);
+    setConnectingAction(null);
+  }, []);
+
   // Setup Colyseus Network Listeners ONCE (lifetime of component)
   useEffect(() => {
     colyseusNet.onAssignedSide = (side, rId) => {
@@ -218,19 +233,17 @@ export function BattlerGame() {
 
     colyseusNet.onRoomDisbanded = (reason) => {
       alert(reason || "Room was disbanded.");
-      setPeerConnected(false);
+      resetOnlineSession();
       setScreen("select");
-      setOnlineTab("menu");
-      setOnlinePhase("waiting");
     };
 
     colyseusNet.onDisconnect = (reason) => {
-      setPeerConnected(false);
       if (screenRef.current === "lobby") {
         alert(reason || "Disconnected from lobby.");
+        resetOnlineSession();
         setScreen("select");
-        setOnlineTab("menu");
-        setOnlinePhase("waiting");
+      } else {
+        setPeerConnected(false);
       }
     };
 
@@ -289,7 +302,7 @@ export function BattlerGame() {
     return () => {
       colyseusNet.leave();
     };
-  }, []);
+  }, [resetOnlineSession]);
 
   // Controls Refs
   const kbP1 = useRef<BattleControls>(emptyBattleControls());
@@ -458,6 +471,7 @@ export function BattlerGame() {
   const handleHostOnline = async () => {
     setIsHost(true);
     setMode("online");
+    setRoomCode(""); // Immediately clear any stale room code so UI shows "CONNECTING..."
     setIsConnecting(true);
     setConnectingAction("create");
     try {
@@ -466,6 +480,7 @@ export function BattlerGame() {
       setOnlineTab("host");
     } catch (err: any) {
       alert("Colyseus Connection Error: " + (err?.message || err));
+      resetOnlineSession();
     } finally {
       setIsConnecting(false);
       setConnectingAction(null);
@@ -476,14 +491,16 @@ export function BattlerGame() {
     if (!joinCodeInput.trim()) return;
     setIsHost(false);
     setMode("online");
+    setRoomCode("");
     setIsConnecting(true);
     setConnectingAction("join");
     try {
       const code = joinCodeInput.trim();
-      setRoomCode(code);
       await colyseusNet.joinRoom(code, p1Creature.id);
+      setRoomCode(code);
     } catch (err: any) {
       alert("Failed to join room: " + (err?.message || err));
+      resetOnlineSession();
     } finally {
       setIsConnecting(false);
       setConnectingAction(null);
@@ -492,6 +509,7 @@ export function BattlerGame() {
 
   const handleQuickMatch = async () => {
     setMode("online");
+    setRoomCode("");
     setIsConnecting(true);
     setConnectingAction("quick");
     try {
@@ -500,6 +518,7 @@ export function BattlerGame() {
       setOnlineTab("host");
     } catch (err: any) {
       alert("Colyseus Quick Match Error: " + (err?.message || err));
+      resetOnlineSession();
     } finally {
       setIsConnecting(false);
       setConnectingAction(null);
@@ -518,8 +537,7 @@ export function BattlerGame() {
   const handleChangeCreature = () => {
     sound.ambience(false);
     if (mode === "online") {
-      colyseusNet.leave();
-      setPeerConnected(false);
+      resetOnlineSession();
     }
     setScreen("select");
   };
@@ -597,6 +615,7 @@ export function BattlerGame() {
               }}
               isConnecting={isConnecting}
               connectingAction={connectingAction}
+              onCancelOnline={resetOnlineSession}
             />
           </div>
         ) : screen === "lobby" ? (
@@ -614,11 +633,8 @@ export function BattlerGame() {
               onSelectCreature={(creatureId) => colyseusNet.selectCreature(creatureId)}
               onToggleReady={() => colyseusNet.toggleReady()}
               onLeave={() => {
-                colyseusNet.leave();
+                resetOnlineSession();
                 setScreen("select");
-                setOnlineTab("menu");
-                setOnlinePhase("waiting");
-                setPeerConnected(false);
               }}
             />
           </div>
