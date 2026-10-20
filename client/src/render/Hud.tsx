@@ -5,7 +5,6 @@ interface HudProps {
   leftState: CreatureState;
   rightState: CreatureState;
   currentRound: number;
-  isTwoPlayer: boolean;
   hideAbilityBar?: boolean;
   isOnline?: boolean;
   p1Connected?: boolean;
@@ -13,13 +12,11 @@ interface HudProps {
 }
 
 const P1_KEYS = ["J", "K", "L", "I"];
-const P2_KEYS = ["J", "K", "L", "I"];
 
 export const Hud: React.FC<HudProps> = ({
   leftState,
   rightState,
   currentRound,
-  isTwoPlayer,
   hideAbilityBar = false,
   isOnline = false,
   p1Connected = true,
@@ -265,7 +262,7 @@ export const Hud: React.FC<HudProps> = ({
           </div>
 
           {/* AI Opponent Moves Cooldown Indicators (in Solo Mode) */}
-          {!isTwoPlayer && (
+          {!isOnline && (
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[8px] text-white/50 uppercase font-mono">AI CD:</span>
               <div className="flex items-center gap-1">
@@ -301,11 +298,6 @@ export const Hud: React.FC<HudProps> = ({
         <div className="flex items-end justify-between w-full pb-1">
           {/* P1 Abilities */}
           <div>{renderMoveSlots(leftState, P1_KEYS, "left")}</div>
-
-          {/* P2 Abilities (only shown in local 2-Player mode) */}
-          {isTwoPlayer && (
-            <div>{renderMoveSlots(rightState, P2_KEYS, "right")}</div>
-          )}
         </div>
       )}
     </div>

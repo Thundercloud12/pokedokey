@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bot, Users, Globe, Volume2, VolumeX, Swords, Shield, Zap, Wind, HelpCircle, Loader2 } from "lucide-react";
+import { Bot, Globe, Volume2, VolumeX, Swords, Shield, Zap, Wind, HelpCircle, Loader2 } from "lucide-react";
 import { CREATURES, type Creature, MOVES, TYPE_META, type PlayMode } from "@game/shared";
 import { drawCreature } from "../render/CreatureSprite";
 import { sound } from "../audio/Sound";
@@ -25,8 +25,6 @@ interface SelectScreenProps {
   onHostOnline: () => void;
   onJoinOnline: () => void;
   onQuickMatch?: () => void;
-  serverUrl?: string;
-  onUpdateServerUrl?: (url: string) => void;
   peerConnected: boolean;
   copied: boolean;
   onCopyRoomCode: () => void;
@@ -106,8 +104,6 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
   onHostOnline,
   onJoinOnline,
   onQuickMatch,
-  serverUrl,
-  onUpdateServerUrl,
   peerConnected,
   copied,
   onCopyRoomCode,
@@ -115,13 +111,11 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
   connectingAction = null,
   onCancelOnline,
 }) => {
-  const [activePicker, setActivePicker] = useState<"p1" | "p2">("p1");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
 
   const activeHoveredCreature =
-    CREATURES.find((c) => c.id === hoveredId) ||
-    (activePicker === "p1" ? p1Creature : p2Creature);
+    CREATURES.find((c) => c.id === hoveredId) || p1Creature;
 
   const handleSelect = (c: Creature) => {
     sound.tick();
@@ -132,14 +126,6 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
       const randomOpponent =
         otherCreatures[Math.floor(Math.random() * otherCreatures.length)];
       onSelectP2(randomOpponent);
-    } else if (mode === "local2p") {
-      if (activePicker === "p1") {
-        onSelectP1(c);
-        setActivePicker("p2");
-      } else {
-        onSelectP2(c);
-        setActivePicker("p1");
-      }
     } else {
       // Online mode: player picks their own creature
       onSelectP1(c);
@@ -170,19 +156,6 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
           >
             <Bot size={13} />
             <span>VS AI BOT</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onModeChange("local2p")}
-            className={`flex items-center gap-1.5 border px-2.5 py-1 text-[11px] uppercase tracking-wider transition ${
-              mode === "local2p"
-                ? "border-white bg-white font-bold text-black"
-                : "border-white/20 text-white/60 hover:text-white"
-            }`}
-          >
-            <Users size={13} />
-            <span>2-PLAYER LOCAL</span>
           </button>
 
           <button
@@ -229,32 +202,6 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
             <span className="text-xs font-mono tracking-widest text-white/70 uppercase">
               SELECT ROSTER ({CREATURES.length} COMBATANTS)
             </span>
-            {mode === "local2p" && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActivePicker("p1")}
-                  className={`px-2 py-0.5 text-[10px] font-bold border ${
-                    activePicker === "p1"
-                      ? "border-rose-500 bg-rose-500/20 text-rose-300"
-                      : "border-white/20 text-white/40"
-                  }`}
-                >
-                  P1 (RED) PICKING
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivePicker("p2")}
-                  className={`px-2 py-0.5 text-[10px] font-bold border ${
-                    activePicker === "p2"
-                      ? "border-blue-500 bg-blue-500/20 text-blue-300"
-                      : "border-white/20 text-white/40"
-                  }`}
-                >
-                  P2 (BLUE) PICKING
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Creatures Grid */}
@@ -262,7 +209,7 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
             {CREATURES.map((c) => {
               const meta = TYPE_META[c.type];
               const isP1 = p1Creature.id === c.id;
-              const isP2 = p2Creature.id === c.id;
+              const isP2 = p2Creature.id === c.id && mode === "solo";
               const isHovered = hoveredId === c.id;
 
               return (
@@ -286,12 +233,12 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                   <div className="absolute top-1.5 right-1.5 flex gap-1">
                     {isP1 && (
                       <span className="bg-rose-500 px-1 py-0.2 text-[8px] font-bold text-white rounded">
-                        P1
+                        YOU
                       </span>
                     )}
                     {isP2 && (
                       <span className="bg-blue-500 px-1 py-0.2 text-[8px] font-bold text-white rounded">
-                        {mode === "solo" ? "BOT" : "P2"}
+                        BOT
                       </span>
                     )}
                   </div>
@@ -481,21 +428,6 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
                         Join Room
                       </button>
                     </div>
-                    {serverUrl && (
-                      <div className="flex items-center justify-between text-[9px] text-white/40 pt-1">
-                        <span className="truncate max-w-[200px]">Server: <strong className="text-white/70">{serverUrl}</strong></span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const u = prompt("Enter Colyseus WebSocket Server URL (e.g. ws://YOUR_EC2_IP:2567 or wss://domain.com):", serverUrl || "");
-                            if (u !== null && onUpdateServerUrl) onUpdateServerUrl(u.trim());
-                          }}
-                          className="underline hover:text-white"
-                        >
-                          [Edit Server]
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ) : onlineTab === "host" ? (
                   <div className="flex flex-col items-center gap-1.5">
@@ -594,13 +526,8 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
       <div className="flex flex-wrap items-center justify-between border-t border-white/10 pt-2 text-[10px] font-mono text-white/60">
         <div className="flex items-center gap-3">
           <span>
-            <strong className="text-white">P1:</strong> A/D Run • Space/W Jump • [J/K/L/I] Moves
+            <strong className="text-white">CONTROLS:</strong> A/D Run • Space/W Jump • [J/K/L/I] Moves
           </span>
-          {mode === "local2p" && (
-            <span>
-              <strong className="text-white">P2:</strong> ←/→ Run • ↑ Jump • [J/K/L/I] Moves
-            </span>
-          )}
         </div>
         <span>2D CREATURE ARENA • ORIGINAL 6-ELEMENT WHEEL</span>
       </div>

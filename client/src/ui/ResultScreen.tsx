@@ -9,7 +9,7 @@ interface ResultScreenProps {
   winnerSide: "left" | "right";
   p1Rounds: number;
   p2Rounds: number;
-  isTwoPlayer: boolean;
+  isOnline?: boolean;
   onPlayAgain: () => void;
   onChangeCreature: () => void;
 }
@@ -20,7 +20,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   winnerSide,
   p1Rounds,
   p2Rounds,
-  isTwoPlayer,
+  isOnline = false,
   onPlayAgain,
   onChangeCreature,
 }) => {
@@ -115,10 +115,10 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
 
   const winnerLabel =
     winnerSide === "left"
-      ? isTwoPlayer
+      ? isOnline
         ? "PLAYER 1"
         : "PLAYER"
-      : isTwoPlayer
+      : isOnline
       ? "PLAYER 2"
       : "AI BOT";
 

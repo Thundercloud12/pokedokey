@@ -65,7 +65,7 @@ export type BattlePhase =
   | "round_end"
   | "match_over";
 
-export type PlayMode = "solo" | "local2p" | "online";
+export type PlayMode = "solo" | "online";
 
 export interface BattleControls {
   left: boolean;

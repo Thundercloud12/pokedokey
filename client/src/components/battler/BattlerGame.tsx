@@ -31,7 +31,6 @@ interface ArenaCanvasProps {
   p1Creature: Creature;
   p2Creature: Creature;
   getP1Controls: () => BattleControls;
-  getP2Controls: () => BattleControls;
   onSnapshot: (snap: WorldSnapshot) => void;
   remoteSnapshotRef: React.MutableRefObject<WorldSnapshot | null>;
 }
@@ -43,7 +42,6 @@ function ArenaCanvas({
   p1Creature,
   p2Creature,
   getP1Controls,
-  getP2Controls,
   onSnapshot,
   remoteSnapshotRef,
 }: ArenaCanvasProps) {
@@ -51,8 +49,8 @@ function ArenaCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ArenaRenderer | null>(null);
 
-  const cb = useRef({ getP1Controls, getP2Controls, onSnapshot });
-  cb.current = { getP1Controls, getP2Controls, onSnapshot };
+  const cb = useRef({ getP1Controls, onSnapshot });
+  cb.current = { getP1Controls, onSnapshot };
 
   useEffect(() => {
     if (!rendererRef.current) {
@@ -107,7 +105,7 @@ function ArenaCanvas({
       let n = 0;
       while (acc >= STEP_MS && n < 5) {
         const p1 = cb.current.getP1Controls();
-        let p2 = cb.current.getP2Controls();
+        let p2 = emptyBattleControls();
 
         if (mode === "solo" && botBrain) {
           p2 = botBrain.computeControls(sim.rightState, sim.leftState);
@@ -317,12 +315,8 @@ export function BattlerGame() {
 
   // Controls Refs
   const kbP1 = useRef<BattleControls>(emptyBattleControls());
-  const kbP2 = useRef<BattleControls>(emptyBattleControls());
   const tcP1 = useRef<BattleControls>(emptyBattleControls());
-  const tcP2 = useRef<BattleControls>(emptyBattleControls());
-
   const mergedP1 = useRef<BattleControls>(emptyBattleControls());
-  const mergedP2 = useRef<BattleControls>(emptyBattleControls());
 
   const getP1Controls = useCallback(() => {
     const m = mergedP1.current;
@@ -333,18 +327,6 @@ export function BattlerGame() {
     m.move2 = kbP1.current.move2 || tcP1.current.move2;
     m.move3 = kbP1.current.move3 || tcP1.current.move3;
     m.move4 = kbP1.current.move4 || tcP1.current.move4;
-    return m;
-  }, []);
-
-  const getP2Controls = useCallback(() => {
-    const m = mergedP2.current;
-    m.left = kbP2.current.left || tcP2.current.left;
-    m.right = kbP2.current.right || tcP2.current.right;
-    m.jump = kbP2.current.jump || tcP2.current.jump;
-    m.move1 = kbP2.current.move1 || tcP2.current.move1;
-    m.move2 = kbP2.current.move2 || tcP2.current.move2;
-    m.move3 = kbP2.current.move3 || tcP2.current.move3;
-    m.move4 = kbP2.current.move4 || tcP2.current.move4;
     return m;
   }, []);
 
@@ -384,35 +366,7 @@ export function BattlerGame() {
       const k = e.key.toLowerCase();
       let hit = false;
 
-      // In Local 2-Player mode, both players share the keyboard:
-      // P1: Left side (WASD run, W/Space jump, F/G/R/T abilities)
-      // P2: Right side (Arrows run/jump, J/K/L/I abilities)
-      if (mode === "local2p") {
-        // P1 Movement (WASD + Space)
-        if (k === "a") { kbP1.current.left = down; hit = true; }
-        else if (k === "d") { kbP1.current.right = down; hit = true; }
-        else if (k === "w" || k === " ") { kbP1.current.jump = down; hit = true; }
-        // P1 Attacks (F, G, R, T or Z, X, C, V)
-        else if (k === "f" || k === "z") { kbP1.current.move1 = down; hit = true; }
-        else if (k === "g" || k === "x") { kbP1.current.move2 = down; hit = true; }
-        else if (k === "r" || k === "c") { kbP1.current.move3 = down; hit = true; }
-        else if (k === "t" || k === "v") { kbP1.current.move4 = down; hit = true; }
-
-        // P2 Movement (Arrow keys)
-        if (k === "arrowleft") { kbP2.current.left = down; hit = true; }
-        else if (k === "arrowright") { kbP2.current.right = down; hit = true; }
-        else if (k === "arrowup") { kbP2.current.jump = down; hit = true; }
-        // P2 Attacks (J, K, L, I or Enter)
-        else if (k === "j" || k === "enter") { kbP2.current.move1 = down; hit = true; }
-        else if (k === "k") { kbP2.current.move2 = down; hit = true; }
-        else if (k === "l") { kbP2.current.move3 = down; hit = true; }
-        else if (k === "i" || k === "u" || k === "o") { kbP2.current.move4 = down; hit = true; }
-
-        return hit;
-      }
-
-      // Solo and Online mode: Option A (Modern Two-Handed Brawler Layout)
-      // Left Hand: Movement (A/D run, Space/W jump, or Arrow keys)
+      // Movement (WASD or Arrow keys)
       if (k === "a" || k === "arrowleft") {
         kbP1.current.left = down;
         hit = true;
@@ -424,7 +378,7 @@ export function BattlerGame() {
         hit = true;
       }
 
-      // Right Hand: Combat Actions (Option A: J, K, L, I/U)
+      // Combat Actions (Option A: J, K, L, I/U or 1, 2, 3, 4)
       else if (k === "j" || k === "1" || k === "z") {
         kbP1.current.move1 = down;
         hit = true;
@@ -457,7 +411,6 @@ export function BattlerGame() {
 
     const clear = () => {
       kbP1.current = emptyBattleControls();
-      kbP2.current = emptyBattleControls();
     };
 
     window.addEventListener("keydown", onDown);
@@ -470,14 +423,6 @@ export function BattlerGame() {
       window.removeEventListener("blur", clear);
     };
   }, [screen, mode, startMatch]);
-
-  const [serverUrl, setServerUrl] = useState(() => colyseusNet.serverUrl);
-
-  const handleUpdateServerUrl = (url: string) => {
-    if (!url) return;
-    colyseusNet.setCustomServerUrl(url);
-    setServerUrl(url);
-  };
 
   // Online Colyseus Handlers
   const handleHostOnline = async () => {
@@ -562,7 +507,7 @@ export function BattlerGame() {
     ? CREATURE_MAP[onlineP2CreatureId] || p2Creature
     : p2Creature;
 
-  const isTwoPlayer = mode === "local2p" || mode === "online";
+  const isOnline = mode === "online";
   const winnerSide =
     snapshot && snapshot.left.roundsWon >= 2
       ? "left"
@@ -616,8 +561,6 @@ export function BattlerGame() {
               onHostOnline={handleHostOnline}
               onJoinOnline={handleJoinOnline}
               onQuickMatch={handleQuickMatch}
-              serverUrl={serverUrl}
-              onUpdateServerUrl={handleUpdateServerUrl}
               peerConnected={peerConnected}
               copied={copied}
               onCopyRoomCode={() => {
@@ -697,7 +640,6 @@ export function BattlerGame() {
               p1Creature={effectiveLeftCreature}
               p2Creature={effectiveRightCreature}
               getP1Controls={getP1Controls}
-              getP2Controls={getP2Controls}
               onSnapshot={setSnapshot}
               remoteSnapshotRef={remoteSnapshotRef}
             />
@@ -711,7 +653,6 @@ export function BattlerGame() {
                 leftState={hudLeftState}
                 rightState={hudRightState}
                 currentRound={snapshot?.round || 1}
-                isTwoPlayer={isTwoPlayer}
                 hideAbilityBar={touchEnabled}
                 isOnline={mode === "online"}
                 p1Connected={onlineP1Connected}
@@ -848,7 +789,7 @@ export function BattlerGame() {
                 winnerSide={winnerSide}
                 p1Rounds={snapshot.left.roundsWon}
                 p2Rounds={snapshot.right.roundsWon}
-                isTwoPlayer={isTwoPlayer}
+                isOnline={isOnline}
                 onPlayAgain={handlePlayAgain}
                 onChangeCreature={handleChangeCreature}
               />
