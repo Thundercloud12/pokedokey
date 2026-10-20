@@ -96,13 +96,45 @@ export class ArenaRenderer {
       ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
     }
 
-    // 6. Draw Damage Popups
+    // 6. Draw Damage Popups & Troll Speech Bubbles
     for (const pop of snap.popups) {
-      ctx.fillStyle = "#000000";
-      ctx.font = "bold 9px monospace";
-      ctx.fillText(pop.text, pop.x + 1, pop.y + 1);
-      ctx.fillStyle = pop.color;
-      ctx.fillText(pop.text, pop.x, pop.y);
+      if (pop.color === "#fbbf24") {
+        // Retro comic speech bubble for Troll AI taunts
+        ctx.font = "bold 9px monospace";
+        const textWidth = ctx.measureText(pop.text).width;
+        const padX = 4;
+        const bubbleW = Math.max(16, textWidth + padX * 2);
+        const bubbleH = 12;
+        const bx = Math.round(pop.x - bubbleW / 2);
+        const by = Math.round(pop.y - bubbleH - 3);
+
+        // Bubble background & amber border
+        ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+        ctx.fillRect(bx, by, bubbleW, bubbleH);
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, bubbleW, bubbleH);
+
+        // Speech bubble triangle pointing down
+        ctx.fillStyle = "#f59e0b";
+        ctx.beginPath();
+        ctx.moveTo(pop.x - 2, by + bubbleH);
+        ctx.lineTo(pop.x + 2, by + bubbleH);
+        ctx.lineTo(pop.x, by + bubbleH + 3);
+        ctx.fill();
+
+        // Text
+        ctx.fillStyle = "#fef08a";
+        ctx.textAlign = "center";
+        ctx.fillText(pop.text, pop.x, by + bubbleH - 3);
+        ctx.textAlign = "left";
+      } else {
+        ctx.fillStyle = "#000000";
+        ctx.font = "bold 9px monospace";
+        ctx.fillText(pop.text, pop.x + 1, pop.y + 1);
+        ctx.fillStyle = pop.color;
+        ctx.fillText(pop.text, pop.x, pop.y);
+      }
     }
 
     // 7. Flash Text Announcement

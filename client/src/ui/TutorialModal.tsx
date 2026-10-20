@@ -34,16 +34,8 @@ const ELEMENT_ICONS: Record<TypeId, React.ReactNode> = {
 export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
   const [step, setStep] = useState(0);
   const [selectedType, setSelectedType] = useState<TypeId>("ember");
-  const [dontShowAgain, setDontShowAgain] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleClose = () => {
-    if (dontShowAgain) {
-      localStorage.setItem("creature_battler_tutorial_seen", "true");
-    }
-    onClose();
-  };
 
   const steps = [
     {
@@ -184,7 +176,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose })
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(TYPE_CHART[selectedType] || {})
-                    .filter(([_, mult]) => mult && mult > 1.0)
+                    .filter(([, mult]) => mult && mult > 1.0)
                     .map(([defId]) => (
                       <span
                         key={defId}
@@ -202,7 +194,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose })
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(TYPE_CHART[selectedType] || {})
-                    .filter(([_, mult]) => mult && mult < 1.0)
+                    .filter(([, mult]) => mult && mult < 1.0)
                     .map(([defId]) => (
                       <span
                         key={defId}
@@ -329,7 +321,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose })
 
           <button
             type="button"
-            onClick={handleClose}
+            onClick={onClose}
             className="grid size-7 place-items-center border border-white/20 text-white/60 hover:border-white hover:text-white transition"
           >
             <X size={14} />
@@ -343,15 +335,9 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose })
 
         {/* Modal Footer & Navigation */}
         <div className="flex items-center justify-between border-t border-white/10 bg-black/40 px-4 py-2.5 text-xs">
-          <label className="flex items-center gap-1.5 text-[10px] text-white/50 cursor-pointer hover:text-white/80">
-            <input
-              type="checkbox"
-              checked={dontShowAgain}
-              onChange={(e) => setDontShowAgain(e.target.checked)}
-              className="accent-amber-400 size-3"
-            />
-            <span>Don't show again</span>
-          </label>
+          <span className="text-[10px] text-white/50">
+            Step {step + 1} of {steps.length}
+          </span>
 
           <div className="flex items-center gap-2">
             {step > 0 && (
@@ -377,11 +363,11 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose })
             ) : (
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={onClose}
                 className="flex items-center gap-1 border border-amber-400 bg-amber-400 px-3 py-1 text-[11px] font-bold text-black hover:bg-amber-300 transition"
               >
                 <Check size={13} />
-                <span>START BATTLING!</span>
+                <span>GOT IT!</span>
               </button>
             )}
           </div>

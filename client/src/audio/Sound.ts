@@ -208,6 +208,13 @@ class SoundBox {
     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.18, "square", 0.08, i * 0.09));
   }
 
+  taunt() {
+    // Playful 3-tone troll chuckle
+    [587, 880, 1175].forEach((f, i) =>
+      this.tone(f, f * 1.04, 0.08, "sine", 0.14, i * 0.07)
+    );
+  }
+
   matchWin() {
     this.whistle(0.18);
     this.whistle(0.18, 0.25);

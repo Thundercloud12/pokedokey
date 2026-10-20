@@ -117,10 +117,7 @@ export const SelectScreen: React.FC<SelectScreenProps> = ({
 }) => {
   const [activePicker, setActivePicker] = useState<"p1" | "p2">("p1");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [showTutorial, setShowTutorial] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !localStorage.getItem("creature_battler_tutorial_seen");
-  });
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const activeHoveredCreature =
     CREATURES.find((c) => c.id === hoveredId) ||

@@ -111,6 +111,17 @@ function ArenaCanvas({
 
         if (mode === "solo" && botBrain) {
           p2 = botBrain.computeControls(sim.rightState, sim.leftState);
+          const taunt = botBrain.popTaunt();
+          if (taunt) {
+            sim.popups.push({
+              x: Math.round(taunt.x),
+              y: Math.round(taunt.y - 12),
+              text: taunt.text,
+              color: "#fbbf24",
+              life: 65,
+            });
+            sound.taunt();
+          }
         }
 
         sim.step(p1, p2);
@@ -358,13 +369,14 @@ export function BattlerGame() {
   // Start / Init Match (Solo / Local)
   const startMatch = useCallback(() => {
     sound.unlock();
+    botBrain?.reset();
     const core = new SimulationCore(320, 170, p1Creature, p2Creature);
     core.startMatch();
     setSim(core);
     setSnapshot(core.getSnapshot());
     setScreen("arena");
     sound.ambience(true);
-  }, [p1Creature, p2Creature]);
+  }, [p1Creature, p2Creature, botBrain]);
 
   // Keyboard Listeners
   useEffect(() => {
